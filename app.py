@@ -57,47 +57,77 @@ def main():
         # Initialize R2 data loader
         data_loader = get_data_loader()
 
-        # Test R2 connection
-        st.subheader("🔗 R2 Data Connection")
+        # Test connection silently
         connection_status, connection_msg = data_loader.test_connection()
-
-        if connection_status:
-            st.success(f"✅ {connection_msg}")
-        else:
+        if not connection_status:
             st.error(f"❌ {connection_msg}")
             st.info("Please check your .env file and R2 credentials")
             st.stop()
 
-        # Get data information
+        # Get data information (for date range only)
         data_info = data_loader.get_data_info()
         if data_info:
-            st.info(f"""
-            📊 **Dataset Info:**
-            - Total rows: {data_info['total_rows']:,}
-            - Date range: {data_info['min_date']} to {data_info['max_date']}
-            - Unique dates: {data_info['unique_dates']:,}
-            - File: {data_info['file_path']}
-            """)
-
-            # Store min/max dates for date picker
             min_date = pd.to_datetime(data_info['min_date']).date()
             max_date = pd.to_datetime(data_info['max_date']).date()
         else:
             st.error("❌ Could not retrieve dataset information")
             st.stop()
 
-        # Get available funds
-        available_funds = get_available_funds_list(data_loader)
+        # Get available fund categories
+        st.subheader("🏷️ Fund Filters")
 
-        if len(available_funds) < 2:
+        # Get all funds to extract categories
+        all_funds = get_available_funds_list(data_loader)
+
+        if len(all_funds) < 2:
             st.error("❌ Need at least 2 funds in the dataset")
-            st.info("Please ensure your dataset has multiple fund schemes")
+            st.stop()
+
+        # Extract unique categories (excluding Uncategorized)
+        categories_level1 = sorted(set(
+            fund.get('category_level1', 'Uncategorized')
+            for fund in all_funds
+            if fund.get('category_level1') and fund.get('category_level1') != 'Uncategorized'
+        ))
+
+        # Category filter - Level 1 (required selection)
+        selected_category_level1 = st.selectbox(
+            "Scheme Type",
+            categories_level1,
+            help="Select high-level scheme category"
+        )
+
+        # Filter funds by level 1
+        funds_after_level1 = [f for f in all_funds if f.get('category_level1') == selected_category_level1]
+
+        # Get level 2 categories based on level 1 selection
+        categories_level2 = sorted(set(
+            fund.get('category_level2', 'Uncategorized')
+            for fund in funds_after_level1
+            if fund.get('category_level2') and fund.get('category_level2') != 'Uncategorized'
+        ))
+
+        # Category filter - Level 2 (required selection)
+        selected_category_level2 = st.selectbox(
+            "Scheme Category",
+            categories_level2,
+            help="Select specific scheme category"
+        )
+
+        # Filter funds based on both category selections
+        filtered_funds = [
+            f for f in funds_after_level1
+            if f.get('category_level2') == selected_category_level2
+        ]
+
+        if len(filtered_funds) < 2:
+            st.warning("⚠️ Need at least 2 funds in selected category. Please adjust filters.")
             st.stop()
 
         st.subheader("📈 Fund Selection")
 
         # Create display options for selectbox
-        fund_options = [fund['display_name'] for fund in available_funds]
+        fund_options = [fund['display_name'] for fund in filtered_funds]
 
         selected_fund_idx = st.selectbox(
             "Strategy Fund",
@@ -105,10 +135,10 @@ def main():
             format_func=lambda x: fund_options[x],
             help="Select the fund to analyze"
         )
-        selected_fund_scheme = available_funds[selected_fund_idx]
+        selected_fund_scheme = filtered_funds[selected_fund_idx]
 
         # Filter out the selected fund for benchmark selection
-        benchmark_options = [fund for i, fund in enumerate(available_funds) if i != selected_fund_idx]
+        benchmark_options = [fund for i, fund in enumerate(filtered_funds) if i != selected_fund_idx]
         benchmark_display_options = [fund['display_name'] for fund in benchmark_options]
 
         selected_benchmark_idx = st.selectbox(

@@ -111,20 +111,25 @@ class R2DataLoader:
             return []
 
         try:
-            # Get unique fund schemes, prioritizing popular/recent ones
+            # Get unique fund schemes with category information, prioritizing popular/recent ones
             query = f"""
-            SELECT
-                scheme_name,
-                scheme_code,
-                amc_name,
-                COUNT(*) as data_points,
-                MAX(date) as latest_date
-            FROM 's3://{bucket}/{data_path}'
-            WHERE scheme_name IS NOT NULL
-            AND nav IS NOT NULL
-            GROUP BY scheme_name, scheme_code, amc_name
-            ORDER BY data_points DESC, latest_date DESC
-            LIMIT {limit};
+            WITH fund_stats AS (
+                SELECT
+                    scheme_name,
+                    scheme_code,
+                    amc_name,
+                    FIRST(scheme_category_level1) as scheme_category_level1,
+                    FIRST(scheme_category_level2) as scheme_category_level2,
+                    COUNT(*) as data_points,
+                    MAX(date) as latest_date
+                FROM 's3://{bucket}/{data_path}'
+                WHERE scheme_name IS NOT NULL
+                AND nav IS NOT NULL
+                GROUP BY scheme_name, scheme_code, amc_name
+                ORDER BY data_points DESC, latest_date DESC
+                LIMIT {limit}
+            )
+            SELECT * FROM fund_stats;
             """
 
             result = _self.conn.execute(query).fetchall()
@@ -132,13 +137,15 @@ class R2DataLoader:
             # Create a list of fund options with descriptive names
             funds = []
             for row in result:
-                scheme_name, scheme_code, amc_name, data_points, latest_date = row
-                fund_display = f"{scheme_name} ({amc_name}) - {data_points:,} points"
+                scheme_name, scheme_code, amc_name, cat_level1, cat_level2, data_points, latest_date = row
+                fund_display = f"{scheme_name} ({scheme_code})"
                 funds.append({
                     'display_name': fund_display,
                     'scheme_name': scheme_name,
                     'scheme_code': scheme_code,
                     'amc_name': amc_name,
+                    'category_level1': cat_level1 if cat_level1 else "Uncategorized",
+                    'category_level2': cat_level2 if cat_level2 else "Uncategorized",
                     'data_points': data_points,
                     'latest_date': latest_date
                 })
