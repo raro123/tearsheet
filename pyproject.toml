@@ -1,0 +1,41 @@
+[project]
+name = "fund-tearsheet"
+version = "0.1.0"
+description = "A comprehensive Streamlit application for analyzing mutual fund performance"
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "streamlit>=1.29.0",
+    "pandas>=2.1.0",
+    "numpy>=1.24.3",
+    "plotly>=5.17.0",
+    "scipy>=1.11.0",
+    "pyarrow>=13.0.0",
+    "duckdb>=1.1.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "black>=23.7.0",
+    "ruff>=0.0.285",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src", "utils"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
