@@ -75,10 +75,18 @@ def calculate_consecutive_streaks(returns):
     """Calculate max consecutive wins and losses"""
     signs = np.sign(returns)
     sign_changes = signs != signs.shift()
-    streaks = signs.groupby(sign_changes.cumsum()).count()
+    streak_groups = sign_changes.cumsum()
 
-    max_wins = streaks[signs > 0].max() if (signs > 0).any() else 0
-    max_losses = streaks[signs < 0].max() if (signs < 0).any() else 0
+    # Group by streak and get the sign for each streak group
+    streak_info = pd.DataFrame({'sign': signs, 'group': streak_groups})
+    streak_counts = streak_info.groupby('group').agg({'sign': ['first', 'count']})
+
+    # Extract first sign and count for each streak
+    streak_signs = streak_counts[('sign', 'first')]
+    streak_lengths = streak_counts[('sign', 'count')]
+
+    max_wins = streak_lengths[streak_signs > 0].max() if (streak_signs > 0).any() else 0
+    max_losses = streak_lengths[streak_signs < 0].max() if (streak_signs < 0).any() else 0
 
     return max_wins, max_losses
 

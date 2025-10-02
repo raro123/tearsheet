@@ -38,16 +38,16 @@ class R2DataLoader:
                 endpoint = r2_config['endpoint'].replace('https://', '').replace('http://', '')
                 r2_config['endpoint'] = endpoint
 
-            # Set S3 configuration for R2
-            
-            """Setup R2 connection using environment variables."""
-            self.conn.sql(f"""
-                CREATE OR REPLACE SECRET (
-            TYPE s3,
-            KEY_ID '{r2_config['key_id']}',
-            SECRET '{r2_config['secret']}',
-            ACCOUNT_ID '{r2_config['account_id']}'
-        );
+            # Set S3 configuration for R2 using DuckDB SECRET
+            self.conn.execute(f"""
+                CREATE OR REPLACE SECRET r2_secret (
+                    TYPE S3,
+                    KEY_ID '{r2_config['key_id']}',
+                    SECRET '{r2_config['secret']}',
+                    ENDPOINT '{r2_config['endpoint']}',
+                    URL_STYLE 'path',
+                    USE_SSL true
+                )
             """)
             
         except Exception as e:
@@ -176,6 +176,8 @@ class R2DataLoader:
             SELECT
                 date,
                 scheme_name,
+                amc_name,
+                scheme_code,
                 nav
             FROM 's3://{bucket}/{data_path}'
             WHERE {' AND '.join(where_conditions)}
@@ -191,7 +193,11 @@ class R2DataLoader:
             # Convert date to datetime
             df_long['date'] = pd.to_datetime(df_long['date'])
 
-            # Pivot from long to wide format
+            # Remove duplicates - keep the last entry for each date-scheme combination
+            # This handles cases where there might be multiple NAV updates on the same day
+            df_long = df_long.drop_duplicates(subset=['date', 'scheme_name'], keep='last')
+
+            # Pivot from long to wide format - use scheme_name as columns
             df_wide = df_long.pivot(index='date', columns='scheme_name', values='nav')
 
             # Drop columns with all NaN values
