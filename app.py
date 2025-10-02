@@ -84,11 +84,7 @@ def main():
             st.stop()
 
         # Extract unique categories (excluding Uncategorized)
-        categories_level1 = sorted(set(
-            fund.get('category_level1', 'Uncategorized')
-            for fund in all_funds
-            if fund.get('category_level1') and fund.get('category_level1') != 'Uncategorized'
-        ))
+        categories_level1 = all_funds.scheme_category_level1.dropna().unique().tolist()
 
         # Category filter - Level 1 (required selection)
         selected_category_level1 = st.selectbox(
@@ -97,15 +93,11 @@ def main():
             help="Select high-level scheme category"
         )
 
-        # Filter funds by level 1
-        funds_after_level1 = [f for f in all_funds if f.get('category_level1') == selected_category_level1]
-
         # Get level 2 categories based on level 1 selection
-        categories_level2 = sorted(set(
-            fund.get('category_level2', 'Uncategorized')
-            for fund in funds_after_level1
-            if fund.get('category_level2') and fund.get('category_level2') != 'Uncategorized'
-        ))
+        categories_level2 = (all_funds
+                            .query("scheme_category_level1 == @selected_category_level1")
+                            .scheme_category_level2.unique().tolist()
+                            )
 
         # Category filter - Level 2 (required selection)
         selected_category_level2 = st.selectbox(
@@ -115,43 +107,33 @@ def main():
         )
 
         # Filter funds based on both category selections
-        filtered_funds = [
-            f for f in funds_after_level1
-            if f.get('category_level2') == selected_category_level2
-        ]
-
-        if len(filtered_funds) < 2:
-            st.warning("⚠️ Need at least 2 funds in selected category. Please adjust filters.")
-            st.stop()
 
         st.subheader("📈 Fund Selection")
 
         # Create display options for selectbox
-        fund_options = [fund['display_name'] for fund in filtered_funds]
-
-        selected_fund_idx = st.selectbox(
+        fund_options = (all_funds
+                .query("scheme_category_level1 == @selected_category_level1 and scheme_category_level2 == @selected_category_level2")
+                ['display_name'].tolist()
+                )
+        selected_fund_scheme = st.selectbox(
             "Strategy Fund",
-            range(len(fund_options)),
-            format_func=lambda x: fund_options[x],
+            fund_options,
             help="Select the fund to analyze"
         )
-        selected_fund_scheme = filtered_funds[selected_fund_idx]
 
         # Filter out the selected fund for benchmark selection
-        benchmark_options = [fund for i, fund in enumerate(filtered_funds) if i != selected_fund_idx]
-        benchmark_display_options = [fund['display_name'] for fund in benchmark_options]
+        benchmark_display_options = fund_options
 
-        selected_benchmark_idx = st.selectbox(
+        selected_benchmark_scheme = st.selectbox(
             "Benchmark",
-            range(len(benchmark_options)),
-            format_func=lambda x: benchmark_display_options[x],
+            benchmark_display_options,
             help="Select the benchmark for comparison"
         )
-        selected_benchmark_scheme = benchmark_options[selected_benchmark_idx]
+
 
         # Show fund details
-        st.caption(f"**Strategy:** {selected_fund_scheme['scheme_name']}")
-        st.caption(f"**Benchmark:** {selected_benchmark_scheme['scheme_name']}")
+        st.caption(f"**Strategy:** {selected_fund_scheme}")
+        st.caption(f"**Benchmark:** {selected_benchmark_scheme}")
 
         # Date range
         st.subheader("📅 Analysis Period")
@@ -203,8 +185,8 @@ def main():
         st.stop()
 
     # Get scheme names for column access
-    strategy_name = selected_fund_scheme['scheme_name']
-    benchmark_name = selected_benchmark_scheme['scheme_name']
+    strategy_name = selected_fund_scheme
+    benchmark_name = selected_benchmark_scheme
 
     # Calculate returns
     strategy_nav = df[strategy_name]

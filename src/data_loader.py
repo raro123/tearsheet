@@ -118,6 +118,7 @@ class R2DataLoader:
                     scheme_name,
                     scheme_code,
                     amc_name,
+                    scheme_name || ' |' || scheme_code as display_name,
                     FIRST(scheme_category_level1) as scheme_category_level1,
                     FIRST(scheme_category_level2) as scheme_category_level2,
                     COUNT(*) as data_points,
@@ -125,35 +126,35 @@ class R2DataLoader:
                 FROM 's3://{bucket}/{data_path}'
                 WHERE scheme_name IS NOT NULL
                 AND nav IS NOT NULL
-                GROUP BY scheme_name, scheme_code, amc_name
+                GROUP BY scheme_name, scheme_code, amc_name, display_name
                 ORDER BY data_points DESC, latest_date DESC
                 LIMIT {limit}
             )
             SELECT * FROM fund_stats;
             """
 
-            result = _self.conn.execute(query).fetchall()
+            result = _self.conn.execute(query).df()
 
             # Create a list of fund options with descriptive names
-            funds = []
-            for row in result:
-                scheme_name, scheme_code, amc_name, cat_level1, cat_level2, data_points, latest_date = row
-                fund_display = f"{scheme_name} ({scheme_code})"
-                funds.append({
-                    'display_name': fund_display,
-                    'scheme_name': scheme_name,
-                    'scheme_code': scheme_code,
-                    'amc_name': amc_name,
-                    'category_level1': cat_level1 if cat_level1 else "Uncategorized",
-                    'category_level2': cat_level2 if cat_level2 else "Uncategorized",
-                    'data_points': data_points,
-                    'latest_date': latest_date
-                })
+            # funds = []
+            # for row in result:
+            #     scheme_name, scheme_code, amc_name, cat_level1, cat_level2, data_points, latest_date = row
+            #     fund_display = f"{scheme_name} ({scheme_code})"
+            #     funds.append({
+            #         'display_name': fund_display,
+            #         'scheme_name': scheme_name,
+            #         'scheme_code': scheme_code,
+            #         'amc_name': amc_name,
+            #         'category_level1': cat_level1 if cat_level1 else "Uncategorized",
+            #         'category_level2': cat_level2 if cat_level2 else "Uncategorized",
+            #         'data_points': data_points,
+            #         'latest_date': latest_date
+            #     })
 
-            return funds
+            return result
         except Exception as e:
             st.error(f"Failed to get available funds: {str(e)}")
-            return []
+            return None
 
     @st.cache_data
     def load_fund_data(_self, start_date=None, end_date=None, selected_fund_schemes=None):
@@ -166,46 +167,51 @@ class R2DataLoader:
 
         try:
             # Build the query to get the long format data
-            where_conditions = ["nav IS NOT NULL", "date IS NOT NULL"]
+            df_long = (_self.conn.read_parquet(f"s3://{bucket}/{data_path}")
+             .filter(f"date>='{start_date}'")
+             .filter(f"date<='{end_date}'")
+             .filter(f"scheme_code IN {tuple(code.split('|')[1] for code in  selected_fund_schemes)}")
+            .df()
+             )
+            # where_conditions = ["nav IS NOT NULL", "date IS NOT NULL"]
 
-            # Add fund filtering if provided
-            if selected_fund_schemes:
-                fund_filter = "', '".join([scheme['scheme_name'] for scheme in selected_fund_schemes])
-                where_conditions.append(f"scheme_name IN ('{fund_filter}')")
+            # # Add fund filtering if provided
+            # # if selected_fund_schemes:
+            # #     fund_filter = "', '".join([scheme for scheme in selected_fund_schemes])
+            # #     where_conditions.append(f"display_name IN ('{fund_filter}')")
 
-            # Add date filtering if provided
-            if start_date:
-                where_conditions.append(f"date >= '{start_date}'")
-            if end_date:
-                where_conditions.append(f"date <= '{end_date}'")
+            # # Add date filtering if provided
+            # if start_date:
+            #     where_conditions.append(f"date >= '{start_date}'")
+            # if end_date:
+            #     where_conditions.append(f"date <= '{end_date}'")
 
-            query = f"""
-            SELECT
-                date,
-                scheme_name,
-                amc_name,
-                scheme_code,
-                nav
-            FROM 's3://{bucket}/{data_path}'
-            WHERE {' AND '.join(where_conditions)}
-            ORDER BY date, scheme_name;
-            """
+            # query = f"""
+            # SELECT
+            #     date,
+            #     scheme_name,
+            #     amc_name,
+            #     scheme_code,
+            #     display_name,
+            #     nav
+            # FROM 's3://{bucket}/{data_path}'
+            # WHERE {' OR '.join(where_conditions)}
+            # ORDER BY date, scheme_name;
+            # """
 
             # Execute query and get DataFrame
-            df_long = _self.conn.execute(query).df()
 
             if df_long.empty:
                 return None
 
             # Convert date to datetime
             df_long['date'] = pd.to_datetime(df_long['date'])
+            df_long['display_name'] = df_long['scheme_name'] + ' |' + df_long['scheme_code'].astype(str)
 
-            # Remove duplicates - keep the last entry for each date-scheme combination
-            # This handles cases where there might be multiple NAV updates on the same day
-            df_long = df_long.drop_duplicates(subset=['date', 'scheme_name'], keep='last')
+            print('here')
 
             # Pivot from long to wide format - use scheme_name as columns
-            df_wide = df_long.pivot(index='date', columns='scheme_name', values='nav')
+            df_wide = df_long.pivot(index='date', columns='display_name', values='nav')
 
             # Drop columns with all NaN values
             df_wide = df_wide.dropna(axis=1, how='all')
@@ -214,6 +220,7 @@ class R2DataLoader:
             df_wide = df_wide.sort_index()
 
             return df_wide
+            
 
         except Exception as e:
             st.error(f"Failed to load fund data: {str(e)}")
