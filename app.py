@@ -1,18 +1,16 @@
 import streamlit as st
 import pandas as pd
-import os
 
 # Import custom modules
 from src.data_loader import (
-    get_data_loader, get_fund_columns,
-    filter_by_date_range, calculate_returns
+    get_data_loader, calculate_returns
 )
 from src.metrics import calculate_all_metrics
 from src.visualizations import (
-    create_cumulative_returns_chart, create_drawdown_chart,
-    create_monthly_returns_heatmap, create_rolling_sharpe_chart,
+    create_cumulative_returns_chart,
     create_log_returns_chart, create_annual_returns_chart,
-    create_drawdown_comparison_chart
+    create_drawdown_comparison_chart, create_rolling_returns_chart,
+    create_monthly_returns_table
 )
 from utils.helpers import create_metrics_comparison_df, get_period_description
 
@@ -189,17 +187,25 @@ benchmark_metrics = calculate_all_metrics(benchmark_returns, risk_free_rate=risk
 
 # Summary Cards
 st.header("📊 Performance Summary")
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
     st.metric(
         "Total Return",
-        f"{strategy_metrics['Cumulative Return']*100:.2f}%",
-        delta=f"{(strategy_metrics['Cumulative Return'] - benchmark_metrics['Cumulative Return'])*100:.2f}% vs BM",
+        f"{strategy_metrics['Cumulative Return']*100:.1f}%",
+        delta=f"{(strategy_metrics['Cumulative Return'] - benchmark_metrics['Cumulative Return'])*100:.1f}% vs BM",
         help="Total cumulative return over the period"
     )
 
 with col2:
+    st.metric(
+        "CAGR",
+        f"{strategy_metrics['CAGR']*100:.1f}%",
+        delta=f"{(strategy_metrics['CAGR'] - benchmark_metrics['CAGR'])*100:.1f}% vs BM",
+        help="Compound Annual Growth Rate"
+    )
+
+with col3:
     st.metric(
         "Sharpe Ratio",
         f"{strategy_metrics['Sharpe Ratio']:.2f}",
@@ -207,20 +213,20 @@ with col2:
         help="Risk-adjusted return metric"
     )
 
-with col3:
+with col4:
     st.metric(
         "Max Drawdown",
-        f"{strategy_metrics['Max Drawdown']*100:.2f}%",
-        delta=f"{(strategy_metrics['Max Drawdown'] - benchmark_metrics['Max Drawdown'])*100:.2f}% vs BM",
+        f"{strategy_metrics['Max Drawdown']*100:.1f}%",
+        delta=f"{(benchmark_metrics['Max Drawdown'] - strategy_metrics['Max Drawdown'])*100:.1f}% vs BM",
         delta_color="inverse",
         help="Maximum peak-to-trough decline"
     )
 
-with col4:
+with col5:
     st.metric(
         "Volatility",
-        f"{strategy_metrics['Volatility (ann.)']*100:.2f}%",
-        delta=f"{(strategy_metrics['Volatility (ann.)'] - benchmark_metrics['Volatility (ann.)'])*100:.2f}% vs BM",
+        f"{strategy_metrics['Volatility (ann.)']*100:.1f}%",
+        delta=f"{(strategy_metrics['Volatility (ann.)'] - benchmark_metrics['Volatility (ann.)'])*100:.1f}% vs BM",
         delta_color="inverse",
         help="Annualized standard deviation"
     )
@@ -260,6 +266,24 @@ with col_left:
         use_container_width=True
     )
 
+    # Rolling Returns with period selector
+    rolling_period = st.selectbox(
+        "Rolling Period",
+        options=[("1 Year", 252), ("3 Years", 756), ("5 Years", 1260)],
+        format_func=lambda x: x[0],
+        index=0,
+        key="rolling_period_selector"
+    )
+
+    st.plotly_chart(
+        create_rolling_returns_chart(
+            strategy_returns, benchmark_returns,
+            strategy_name, benchmark_name,
+            window=rolling_period[1]
+        ),
+        use_container_width=True
+    )
+
     # Annual Returns Bar Chart
     st.plotly_chart(
         create_annual_returns_chart(
@@ -269,23 +293,39 @@ with col_left:
         use_container_width=True
     )
 
-    # Monthly Heatmap
-    st.plotly_chart(
-        create_monthly_returns_heatmap(strategy_returns, strategy_name),
-        use_container_width=True
-    )
-
 with col_right:
     # Metrics Table
-    st.subheader("📋 Detailed Metrics")
+    st.subheader("📊 Performance Metrics")
 
     metrics_df = create_metrics_comparison_df(strategy_metrics, benchmark_metrics)
 
+    # Apply styling to the metrics table
+    def highlight_section_headers(row):
+        if '──' in str(row['Metric']):
+            return ['background-color: #1F2937; color: white; font-weight: bold'] * len(row)
+        return [''] * len(row)
+
+    styled_metrics = metrics_df.style.apply(highlight_section_headers, axis=1)
+
     st.dataframe(
-        metrics_df,
+        styled_metrics,
         hide_index=True,
         use_container_width=True,
-        height=500
+        height=1000,
+        column_config={
+            "Metric": st.column_config.TextColumn(
+                "Metric",
+                width="medium",
+            ),
+            "Strategy": st.column_config.TextColumn(
+                "Strategy",
+                width="small",
+            ),
+            "Benchmark": st.column_config.TextColumn(
+                "Benchmark",
+                width="small",
+            ),
+        }
     )
 
     # Download button
@@ -297,26 +337,48 @@ with col_right:
         mime="text/csv"
     )
 
-# Additional Analysis
+# Monthly Returns Tables
 st.markdown("---")
-st.subheader("📈 Additional Analysis")
+st.subheader("📅 Monthly Returns (%)")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.plotly_chart(
-        create_drawdown_chart(strategy_returns, strategy_name),
-        use_container_width=True
+    st.caption(f"**{strategy_name}**")
+    strategy_monthly_table = create_monthly_returns_table(strategy_returns)
+
+    # Apply conditional formatting
+    styled_strategy = strategy_monthly_table.style.background_gradient(
+        cmap='RdYlGn',
+        subset=[col for col in strategy_monthly_table.columns if col != 'Year'],
+        vmin=-10,
+        vmax=10
+    ).format({col: '{:.2f}' for col in strategy_monthly_table.columns if col != 'Year'})
+
+    st.dataframe(
+        styled_strategy,
+        hide_index=True,
+        use_container_width=True,
+        height=400
     )
 
 with col2:
-    st.plotly_chart(
-        create_rolling_sharpe_chart(
-            strategy_returns, benchmark_returns,
-            strategy_name, benchmark_name,
-            risk_free_rate=risk_free_rate
-        ),
-        use_container_width=True
+    st.caption(f"**{benchmark_name}**")
+    benchmark_monthly_table = create_monthly_returns_table(benchmark_returns)
+
+    # Apply conditional formatting
+    styled_benchmark = benchmark_monthly_table.style.background_gradient(
+        cmap='RdYlGn',
+        subset=[col for col in benchmark_monthly_table.columns if col != 'Year'],
+        vmin=-10,
+        vmax=10
+    ).format({col: '{:.2f}' for col in benchmark_monthly_table.columns if col != 'Year'})
+
+    st.dataframe(
+        styled_benchmark,
+        hide_index=True,
+        use_container_width=True,
+        height=400
     )
 
 # Footer

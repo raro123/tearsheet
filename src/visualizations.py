@@ -24,13 +24,14 @@ def create_cumulative_returns_chart(strategy_returns, benchmark_returns, strateg
     ))
 
     fig.update_layout(
-        title="Cumulative Returns vs Benchmark",
+        title=dict(text="Cumulative Returns vs Benchmark", font=dict(size=18, weight='bold')),
         xaxis_title="Date",
         yaxis_title="Cumulative Return (%)",
         hovermode='x unified',
-        height=400,
+        height=450,
         template='plotly_white',
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5),
+        margin=dict(b=100)
     )
 
     return fig
@@ -77,32 +78,37 @@ def create_drawdown_comparison_chart(strategy_returns, benchmark_returns, strate
 
     fig = go.Figure()
 
-    # Add strategy drawdown
+    # Add strategy drawdown as area
     fig.add_trace(go.Scatter(
         x=strategy_drawdown.index,
         y=strategy_drawdown,
         name=strategy_name,
+        fill='tozeroy',
         line=dict(color='#f59e0b', width=2),
+        fillcolor='rgba(245, 158, 11, 0.3)',
         hovertemplate='%{y:.2f}%<extra></extra>'
     ))
 
-    # Add benchmark drawdown
+    # Add benchmark drawdown as area
     fig.add_trace(go.Scatter(
         x=benchmark_drawdown.index,
         y=benchmark_drawdown,
         name=benchmark_name,
+        fill='tozeroy',
         line=dict(color='#3b82f6', width=2),
+        fillcolor='rgba(59, 130, 246, 0.3)',
         hovertemplate='%{y:.2f}%<extra></extra>'
     ))
 
     fig.update_layout(
-        title="Drawdown Comparison",
+        title=dict(text="Drawdown Comparison", font=dict(size=18, weight='bold')),
         xaxis_title="Date",
         yaxis_title="Drawdown (%)",
         hovermode='x unified',
-        height=400,
+        height=450,
         template='plotly_white',
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5),
+        margin=dict(b=100)
     )
 
     return fig
@@ -140,6 +146,49 @@ def create_monthly_returns_heatmap(returns, name):
     )
 
     return fig
+
+def create_monthly_returns_table(returns):
+    """Create monthly returns table with YTD column"""
+    # Calculate monthly returns
+    monthly_returns = returns.resample('M').apply(lambda x: (1 + x).prod() - 1) * 100
+
+    # Create pivot table
+    monthly_returns_df = pd.DataFrame({
+        'Year': monthly_returns.index.year,
+        'Month': monthly_returns.index.month,
+        'Return': monthly_returns.values
+    })
+
+    pivot = monthly_returns_df.pivot(index='Year', columns='Month', values='Return')
+
+    # Rename columns to month names
+    month_names = {1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
+                   7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec'}
+    pivot.columns = [month_names.get(col, col) for col in pivot.columns]
+
+    # Calculate YTD for each year
+    ytd_returns = []
+    for year in pivot.index:
+        year_data = monthly_returns[monthly_returns.index.year == year]
+        if len(year_data) > 0:
+            # YTD is compound return: (1 + r1) * (1 + r2) * ... - 1
+            ytd = ((1 + year_data / 100).prod() - 1) * 100
+            ytd_returns.append(ytd)
+        else:
+            ytd_returns.append(np.nan)
+
+    pivot['YTD'] = ytd_returns
+
+    # Round to 2 decimal places
+    pivot = pivot.round(2)
+
+    # Sort by year descending (latest year first)
+    pivot = pivot.sort_index(ascending=False)
+
+    # Reset index to make Year a column
+    pivot = pivot.reset_index()
+
+    return pivot
 
 def create_rolling_sharpe_chart(returns, benchmark_returns, strategy_name, benchmark_name, window=252, risk_free_rate=0.0249):
     """Create rolling Sharpe ratio chart"""
@@ -200,89 +249,121 @@ def create_log_returns_chart(strategy_returns, benchmark_returns, strategy_name,
     ))
 
     fig.update_layout(
-        title="Cumulative Returns (Log Scale)",
+        title=dict(text="Cumulative Returns (Log Scale)", font=dict(size=18, weight='bold')),
         xaxis_title="Date",
         yaxis_title="Growth of $1",
         yaxis_type="log",
         hovermode='x unified',
-        height=350,
+        height=450,
         template='plotly_white',
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5),
+        margin=dict(b=100)
+    )
+
+    return fig
+
+def create_rolling_returns_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name, window=252):
+    """Create rolling returns comparison chart"""
+    TRADING_DAYS = 252
+
+    # Calculate rolling returns (annualized)
+    strategy_rolling = strategy_returns.rolling(window).apply(lambda x: (1 + x).prod() - 1) * (TRADING_DAYS / window) * 100
+    benchmark_rolling = benchmark_returns.rolling(window).apply(lambda x: (1 + x).prod() - 1) * (TRADING_DAYS / window) * 100
+
+    fig = go.Figure()
+
+    # Add strategy rolling returns
+    fig.add_trace(go.Scatter(
+        x=strategy_rolling.index,
+        y=strategy_rolling,
+        name=strategy_name,
+        line=dict(color='#f59e0b', width=2),
+        hovertemplate='%{y:.2f}%<extra></extra>'
+    ))
+
+    # Add benchmark rolling returns
+    fig.add_trace(go.Scatter(
+        x=benchmark_rolling.index,
+        y=benchmark_rolling,
+        name=benchmark_name,
+        line=dict(color='#3b82f6', width=2),
+        hovertemplate='%{y:.2f}%<extra></extra>'
+    ))
+
+    # Determine period label
+    period_label = f"{window} days"
+    if window == 252:
+        period_label = "1 Year"
+    elif window == 756:
+        period_label = "3 Years"
+    elif window == 1260:
+        period_label = "5 Years"
+
+    fig.update_layout(
+        title=dict(text=f"Rolling Returns ({period_label}, Annualized)", font=dict(size=18, weight='bold')),
+        xaxis_title="Date",
+        yaxis_title="Annualized Return (%)",
+        hovermode='x unified',
+        height=450,
+        template='plotly_white',
+        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5),
+        margin=dict(b=100)
     )
 
     return fig
 
 def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name):
-    """Create annual returns bar chart with difference subplot"""
-    from plotly.subplots import make_subplots
+    """Create annual returns bar chart with data labels"""
 
     # Calculate annual returns
-    strategy_annual = strategy_returns.resample('Y').apply(lambda x: (1 + x).prod() - 1) * 100
-    benchmark_annual = benchmark_returns.resample('Y').apply(lambda x: (1 + x).prod() - 1) * 100
+    strategy_annual = strategy_returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+    benchmark_annual = benchmark_returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
 
-    # Calculate difference
-    difference = strategy_annual - benchmark_annual
+    # Align both series to ensure they have the same years
+    strategy_annual, benchmark_annual = strategy_annual.align(benchmark_annual, join='outer', fill_value=0)
 
     # Extract years
     years = strategy_annual.index.year
 
-    # Create subplot with 2 rows
-    fig = make_subplots(
-        rows=2, cols=1,
-        row_heights=[0.7, 0.3],
-        vertical_spacing=0.1,
-        subplot_titles=("Annual Returns", "Excess Return (Fund - Benchmark)")
-    )
+    fig = go.Figure()
 
-    # Add strategy bars
+    # Add strategy bars with labels
     fig.add_trace(
         go.Bar(
             x=years,
             y=strategy_annual.values,
             name=strategy_name,
             marker_color='#f59e0b',
+            text=[f"{v:.1f}%" for v in strategy_annual.values],
+            textposition='outside',
             hovertemplate='%{y:.2f}%<extra></extra>'
-        ),
-        row=1, col=1
+        )
     )
 
-    # Add benchmark bars
+    # Add benchmark bars with labels
     fig.add_trace(
         go.Bar(
             x=years,
             y=benchmark_annual.values,
             name=benchmark_name,
             marker_color='#3b82f6',
+            text=[f"{v:.1f}%" for v in benchmark_annual.values],
+            textposition='outside',
             hovertemplate='%{y:.2f}%<extra></extra>'
-        ),
-        row=1, col=1
-    )
-
-    # Add difference bars (color based on positive/negative)
-    colors = ['#10b981' if d > 0 else '#ef4444' for d in difference.values]
-    fig.add_trace(
-        go.Bar(
-            x=years,
-            y=difference.values,
-            name='Excess Return',
-            marker_color=colors,
-            hovertemplate='%{y:.2f}%<extra></extra>',
-            showlegend=False
-        ),
-        row=2, col=1
+        )
     )
 
     # Update layout
-    fig.update_xaxes(title_text="Year", row=2, col=1)
-    fig.update_yaxes(title_text="Return (%)", row=1, col=1)
-    fig.update_yaxes(title_text="Difference (%)", row=2, col=1)
-
     fig.update_layout(
-        height=600,
+        title=dict(text="Annual Returns", font=dict(size=18, weight='bold')),
+        xaxis_title="Year",
+        yaxis_title="Return (%)",
+        height=500,
         template='plotly_white',
         barmode='group',
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        hovermode='x unified'
+        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5),
+        hovermode='x unified',
+        margin=dict(t=80, b=110, l=50, r=50)  # Extra top margin for labels, bottom for legend
     )
 
     return fig
