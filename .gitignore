@@ -84,6 +84,8 @@ debug_*.py
 # DuckDB
 *.duckdb
 *.db
+*.db-shm
+*.db-wal
 
 # Other
 .pytest_cache/
