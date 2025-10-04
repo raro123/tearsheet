@@ -11,7 +11,8 @@ from src.metrics import calculate_all_metrics
 from src.visualizations import (
     create_cumulative_returns_chart, create_drawdown_chart,
     create_monthly_returns_heatmap, create_rolling_sharpe_chart,
-    create_log_returns_chart, create_annual_returns_chart
+    create_log_returns_chart, create_annual_returns_chart,
+    create_drawdown_comparison_chart
 )
 from utils.helpers import create_metrics_comparison_df, get_period_description
 
@@ -249,6 +250,15 @@ with col_left:
             ),
             use_container_width=True
         )
+
+    # Drawdown Comparison
+    st.plotly_chart(
+        create_drawdown_comparison_chart(
+            strategy_returns, benchmark_returns,
+            strategy_name, benchmark_name
+        ),
+        use_container_width=True
+    )
 
     # Annual Returns Bar Chart
     st.plotly_chart(

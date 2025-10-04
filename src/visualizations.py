@@ -63,6 +63,50 @@ def create_drawdown_chart(returns, name):
 
     return fig
 
+def create_drawdown_comparison_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name):
+    """Create drawdown comparison chart for strategy vs benchmark"""
+    # Calculate strategy drawdown
+    strategy_cumulative = (1 + strategy_returns).cumprod()
+    strategy_running_max = strategy_cumulative.expanding().max()
+    strategy_drawdown = (strategy_cumulative - strategy_running_max) / strategy_running_max * 100
+
+    # Calculate benchmark drawdown
+    benchmark_cumulative = (1 + benchmark_returns).cumprod()
+    benchmark_running_max = benchmark_cumulative.expanding().max()
+    benchmark_drawdown = (benchmark_cumulative - benchmark_running_max) / benchmark_running_max * 100
+
+    fig = go.Figure()
+
+    # Add strategy drawdown
+    fig.add_trace(go.Scatter(
+        x=strategy_drawdown.index,
+        y=strategy_drawdown,
+        name=strategy_name,
+        line=dict(color='#f59e0b', width=2),
+        hovertemplate='%{y:.2f}%<extra></extra>'
+    ))
+
+    # Add benchmark drawdown
+    fig.add_trace(go.Scatter(
+        x=benchmark_drawdown.index,
+        y=benchmark_drawdown,
+        name=benchmark_name,
+        line=dict(color='#3b82f6', width=2),
+        hovertemplate='%{y:.2f}%<extra></extra>'
+    ))
+
+    fig.update_layout(
+        title="Drawdown Comparison",
+        xaxis_title="Date",
+        yaxis_title="Drawdown (%)",
+        hovermode='x unified',
+        height=400,
+        template='plotly_white',
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+
+    return fig
+
 def create_monthly_returns_heatmap(returns, name):
     """Create monthly returns heatmap"""
     monthly_returns = returns.resample('M').apply(lambda x: (1 + x).prod() - 1) * 100
