@@ -167,3 +167,78 @@ def create_log_returns_chart(strategy_returns, benchmark_returns, strategy_name,
     )
 
     return fig
+
+def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name):
+    """Create annual returns bar chart with difference subplot"""
+    from plotly.subplots import make_subplots
+
+    # Calculate annual returns
+    strategy_annual = strategy_returns.resample('Y').apply(lambda x: (1 + x).prod() - 1) * 100
+    benchmark_annual = benchmark_returns.resample('Y').apply(lambda x: (1 + x).prod() - 1) * 100
+
+    # Calculate difference
+    difference = strategy_annual - benchmark_annual
+
+    # Extract years
+    years = strategy_annual.index.year
+
+    # Create subplot with 2 rows
+    fig = make_subplots(
+        rows=2, cols=1,
+        row_heights=[0.7, 0.3],
+        vertical_spacing=0.1,
+        subplot_titles=("Annual Returns", "Excess Return (Fund - Benchmark)")
+    )
+
+    # Add strategy bars
+    fig.add_trace(
+        go.Bar(
+            x=years,
+            y=strategy_annual.values,
+            name=strategy_name,
+            marker_color='#f59e0b',
+            hovertemplate='%{y:.2f}%<extra></extra>'
+        ),
+        row=1, col=1
+    )
+
+    # Add benchmark bars
+    fig.add_trace(
+        go.Bar(
+            x=years,
+            y=benchmark_annual.values,
+            name=benchmark_name,
+            marker_color='#3b82f6',
+            hovertemplate='%{y:.2f}%<extra></extra>'
+        ),
+        row=1, col=1
+    )
+
+    # Add difference bars (color based on positive/negative)
+    colors = ['#10b981' if d > 0 else '#ef4444' for d in difference.values]
+    fig.add_trace(
+        go.Bar(
+            x=years,
+            y=difference.values,
+            name='Excess Return',
+            marker_color=colors,
+            hovertemplate='%{y:.2f}%<extra></extra>',
+            showlegend=False
+        ),
+        row=2, col=1
+    )
+
+    # Update layout
+    fig.update_xaxes(title_text="Year", row=2, col=1)
+    fig.update_yaxes(title_text="Return (%)", row=1, col=1)
+    fig.update_yaxes(title_text="Difference (%)", row=2, col=1)
+
+    fig.update_layout(
+        height=600,
+        template='plotly_white',
+        barmode='group',
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        hovermode='x unified'
+    )
+
+    return fig
