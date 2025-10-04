@@ -18,41 +18,42 @@ class R2DataLoader:
     def _setup_connection(self):
         """Setup DuckDB connection with R2 configuration"""
         try:
-            self.conn = duckdb.connect()
+            with duckdb.connect() as conn:
+                self.conn = duckdb.connect('./data/mf_data.db')
 
-            # Install and load httpfs extension for S3/R2 support
-            self.conn.execute("INSTALL httpfs;")
-            self.conn.execute("LOAD httpfs;")
+                # Install and load httpfs extension for S3/R2 support
+                self.conn.execute("INSTALL httpfs;")
+                self.conn.execute("LOAD httpfs;")
 
-            # Configure R2 connection
-            r2_config = {
-                'key_id': os.getenv('R2_ACCESS_KEY_ID'),
-                'secret': os.getenv('R2_SECRET_ACCESS_KEY'),
-                'endpoint': os.getenv('R2_ENDPOINT_URL'),
-                'region': os.getenv('R2_REGION', 'auto'),
-                'account_id': os.getenv('R2_ACCOUNT_ID')
-            }
+                # Configure R2 connection
+                r2_config = {
+                    'key_id': os.getenv('R2_ACCESS_KEY_ID'),
+                    'secret': os.getenv('R2_SECRET_ACCESS_KEY'),
+                    'endpoint': os.getenv('R2_ENDPOINT_URL'),
+                    'region': os.getenv('R2_REGION', 'auto'),
+                    'account_id': os.getenv('R2_ACCOUNT_ID')
+                }
 
-            # Clean endpoint URL - remove protocol if present
-            if r2_config['endpoint']:
-                endpoint = r2_config['endpoint'].replace('https://', '').replace('http://', '')
-                r2_config['endpoint'] = endpoint
+                # Clean endpoint URL - remove protocol if present
+                if r2_config['endpoint']:
+                    endpoint = r2_config['endpoint'].replace('https://', '').replace('http://', '')
+                    r2_config['endpoint'] = endpoint
 
-            # Set S3 configuration for R2 using DuckDB SECRET
-            self.conn.execute(f"""
-                CREATE OR REPLACE SECRET r2_secret (
-                    TYPE S3,
-                    KEY_ID '{r2_config['key_id']}',
-                    SECRET '{r2_config['secret']}',
-                    ENDPOINT '{r2_config['endpoint']}',
-                    URL_STYLE 'path',
-                    USE_SSL true
-                )
-            """)
-            
+                # Set S3 configuration for R2 using DuckDB SECRET
+                self.conn.execute(f"""
+                    CREATE OR REPLACE SECRET r2_secret (
+                        TYPE S3,
+                        KEY_ID '{r2_config['key_id']}',
+                        SECRET '{r2_config['secret']}',
+                        ENDPOINT '{r2_config['endpoint']}',
+                        URL_STYLE 'path',
+                        USE_SSL true
+                    )
+                """)
+                
         except Exception as e:
-            st.error(f"Failed to setup R2 connection: {str(e)}")
-            self.conn = None
+                st.error(f"Failed to setup R2 connection: {str(e)}")
+                self.conn = None
 
     def test_connection(self):
         """Test R2 connection"""
@@ -68,89 +69,45 @@ class R2DataLoader:
         except Exception as e:
             return False, f"Connection failed: {str(e)}"
 
-    @st.cache_data
-    def get_data_info(_self):
-        """Get basic information about the dataset"""
-        bucket = os.getenv('R2_BUCKET_NAME')
-        data_path = os.getenv('R2_NAV_DATA_PATH')
-
-        if not _self.conn:
-            return None
-
+    def create_db_tables(self):
+        """Create local DuckDB table from R2 data"""
+        if not self.conn:
+            print("No connection established")
         try:
-            # Get basic stats about the dataset
-            query = f"""
-            SELECT
-                COUNT(*) as total_rows,
-                MIN(date) as min_date,
-                MAX(date) as max_date,
-                COUNT(DISTINCT date) as unique_dates
-            FROM 's3://{bucket}/{data_path}'
-            WHERE date IS NOT NULL;
-            """
+            bucket = os.getenv('R2_BUCKET_NAME')
+            data_path = os.getenv('R2_NAV_DATA_PATH')
+            metadata_path = os.getenv('R2_MF_METADATA_PATH')
+            self.conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS mf_nav_daily_long AS
+                SELECT * FROM read_parquet('s3://{bucket}/{data_path}')
+            """)
+            
+            print("Table mf_nav_daily_long created successfully.")
+            
+            self.conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS mf_scheme_metadata AS
+                SELECT * FROM read_parquet('s3://{bucket}/{metadata_path}')
+            """)
+            print("Table mf_scheme_metadata created successfully.")
 
-            result = _self.conn.execute(query).fetchone()
-            return {
-                'total_rows': result[0],
-                'min_date': result[1],
-                'max_date': result[2],
-                'unique_dates': result[3],
-                'file_path': f"{bucket}/{data_path}"
-            }
         except Exception as e:
-            st.error(f"Failed to get data info: {str(e)}")
-            return None
+            print(f"Failed to create tables: {str(e)}")
 
     @st.cache_data
-    def get_available_funds(_self, limit=1000):
+    def get_available_funds(_self):
         """Get list of available funds (scheme names) from the dataset"""
-        bucket = os.getenv('R2_BUCKET_NAME')
-        data_path = os.getenv('R2_NAV_DATA_PATH')
 
         if not _self.conn:
-            return []
+            return None
 
         try:
             # Get unique fund schemes with category information, prioritizing popular/recent ones
             query = f"""
-            WITH fund_stats AS (
-                SELECT
-                    scheme_name,
-                    scheme_code,
-                    amc_name,
-                    scheme_name || ' |' || scheme_code as display_name,
-                    FIRST(scheme_category_level1) as scheme_category_level1,
-                    FIRST(scheme_category_level2) as scheme_category_level2,
-                    COUNT(*) as data_points,
-                    MAX(date) as latest_date
-                FROM 's3://{bucket}/{data_path}'
-                WHERE scheme_name IS NOT NULL
-                AND nav IS NOT NULL
-                GROUP BY scheme_name, scheme_code, amc_name, display_name
-                ORDER BY data_points DESC, latest_date DESC
-                LIMIT {limit}
-            )
-            SELECT * FROM fund_stats;
+                SELECT * FROM mf_scheme_metadata
             """
 
             result = _self.conn.execute(query).df()
-
-            # Create a list of fund options with descriptive names
-            # funds = []
-            # for row in result:
-            #     scheme_name, scheme_code, amc_name, cat_level1, cat_level2, data_points, latest_date = row
-            #     fund_display = f"{scheme_name} ({scheme_code})"
-            #     funds.append({
-            #         'display_name': fund_display,
-            #         'scheme_name': scheme_name,
-            #         'scheme_code': scheme_code,
-            #         'amc_name': amc_name,
-            #         'category_level1': cat_level1 if cat_level1 else "Uncategorized",
-            #         'category_level2': cat_level2 if cat_level2 else "Uncategorized",
-            #         'data_points': data_points,
-            #         'latest_date': latest_date
-            #     })
-
+            result['display_name'] = result['scheme_name'] + ' |' + result['scheme_code'].astype(str)
             return result
         except Exception as e:
             st.error(f"Failed to get available funds: {str(e)}")
@@ -159,47 +116,20 @@ class R2DataLoader:
     @st.cache_data
     def load_fund_data(_self, start_date=None, end_date=None, selected_fund_schemes=None):
         """Load fund data from R2 and pivot to wide format for analysis"""
-        bucket = os.getenv('R2_BUCKET_NAME')
-        data_path = os.getenv('R2_NAV_DATA_PATH')
 
         if not _self.conn:
             return None
 
         try:
             # Build the query to get the long format data
-            df_long = (_self.conn.read_parquet(f"s3://{bucket}/{data_path}")
-             .filter(f"date>='{start_date}'")
-             .filter(f"date<='{end_date}'")
-             .filter(f"scheme_code IN {tuple(code.split('|')[1] for code in  selected_fund_schemes)}")
-            .df()
-             )
-            # where_conditions = ["nav IS NOT NULL", "date IS NOT NULL"]
-
-            # # Add fund filtering if provided
-            # # if selected_fund_schemes:
-            # #     fund_filter = "', '".join([scheme for scheme in selected_fund_schemes])
-            # #     where_conditions.append(f"display_name IN ('{fund_filter}')")
-
-            # # Add date filtering if provided
-            # if start_date:
-            #     where_conditions.append(f"date >= '{start_date}'")
-            # if end_date:
-            #     where_conditions.append(f"date <= '{end_date}'")
-
-            # query = f"""
-            # SELECT
-            #     date,
-            #     scheme_name,
-            #     amc_name,
-            #     scheme_code,
-            #     display_name,
-            #     nav
-            # FROM 's3://{bucket}/{data_path}'
-            # WHERE {' OR '.join(where_conditions)}
-            # ORDER BY date, scheme_name;
-            # """
-
-            # Execute query and get DataFrame
+            scheme_codes = tuple(code.split('|')[1] for code in selected_fund_schemes)
+            query = f"""
+                SELECT * FROM mf_nav_daily_long
+                WHERE date >= '{start_date}'
+                  AND date <= '{end_date}'
+                  AND scheme_code IN {scheme_codes}
+            """
+            df_long = _self.conn.execute(query).df()
 
             if df_long.empty:
                 return None
@@ -225,6 +155,21 @@ class R2DataLoader:
         except Exception as e:
             st.error(f"Failed to load fund data: {str(e)}")
             return None
+    
+    @st.cache_data
+    def get_data_date_range(_self):
+        """Get the min and max date available in the dataset""" 
+        if not _self.conn:
+            return None, None
+        try:
+            query = "SELECT MIN(date) AS min_date, MAX(date) AS max_date FROM mf_nav_daily_long"
+            result = _self.conn.execute(query).df()
+            min_date = pd.to_datetime(result['min_date'].iloc[0]).date()
+            max_date = pd.to_datetime(result['max_date'].iloc[0]).date()
+            return min_date, max_date
+        except Exception as e:
+            st.error(f"Failed to get data date range: {str(e)}")
+            return None, None
 
 # Initialize global data loader
 @st.cache_resource
@@ -239,9 +184,6 @@ def get_fund_columns(df):
         return []
     return [col for col in df.columns if col.lower() not in ['date', 'index', 'id']]
 
-def get_available_funds_list(data_loader):
-    """Get list of available funds for UI selection"""
-    return data_loader.get_available_funds()
 
 def filter_by_date_range(df, start_date, end_date):
     """Filter dataframe by date range (legacy compatibility)"""
