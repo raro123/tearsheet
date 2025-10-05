@@ -104,19 +104,41 @@ with st.sidebar:
         help="Select the fund to analyze"
     )
 
-    # Filter out the selected fund for benchmark selection
-    benchmark_display_options = fund_options
+    # Benchmark Selection
+    st.subheader("📊 Benchmark Selection")
 
-    selected_benchmark_scheme = st.selectbox(
-        "Benchmark",
-        benchmark_display_options,
-        help="Select the benchmark for comparison"
+    # Index Type selection
+    index_type = st.selectbox(
+        "Index Type",
+        options=["TRI", "PRICE"],
+        index=0,  # TRI as default
+        help="Select Total Return Index (TRI) or Price Index"
     )
 
+    # Index Category selection
+    index_category = st.selectbox(
+        "Index Category",
+        options=["ALL", "BROAD", "SECTORAL"],
+        index=0,  # ALL as default
+        help="Filter by index category"
+    )
+
+    # Get filtered benchmark options
+    benchmark_options = data_loader.get_benchmark_options(
+        index_type=index_type,
+        index_category=index_category
+    )
+
+    # Index selection
+    selected_benchmark_index = st.selectbox(
+        "Select Index",
+        options=benchmark_options,
+        help="Select the benchmark index"
+    )
 
     # Show fund details
     st.caption(f"**Strategy:** {selected_fund_scheme}")
-    st.caption(f"**Benchmark:** {selected_benchmark_scheme}")
+    st.caption(f"**Benchmark:** {selected_benchmark_index} ({index_type})")
 
     # Date range
     st.subheader("📅 Analysis Period")
@@ -158,23 +180,36 @@ with st.sidebar:
 
 # Load data from R2 with filtering
 with st.spinner("Loading data from R2..."):
+    # Load fund data
     df = data_loader.load_fund_data(
         start_date=start_date,
         end_date=end_date,
-        selected_fund_schemes=[selected_fund_scheme, selected_benchmark_scheme]
+        selected_fund_schemes=[selected_fund_scheme]
+    )
+
+    # Load benchmark data
+    benchmark_series = data_loader.load_benchmark_data(
+        index_name=selected_benchmark_index,
+        index_type=index_type,
+        start_date=start_date,
+        end_date=end_date
     )
 
 if df is None or len(df) == 0:
-    st.error("No data available for selected date range")
+    st.error("No fund data available for selected date range")
+    st.stop()
+
+if benchmark_series is None or len(benchmark_series) == 0:
+    st.error("No benchmark data available for selected date range")
     st.stop()
 
 # Get scheme names for column access
 strategy_name = selected_fund_scheme
-benchmark_name = selected_benchmark_scheme
+benchmark_name = f"{selected_benchmark_index} ({index_type})"
 
 # Calculate returns
 strategy_nav = df[strategy_name]
-benchmark_nav = df[benchmark_name]
+benchmark_nav = benchmark_series
 
 strategy_returns = calculate_returns(strategy_nav)
 benchmark_returns = calculate_returns(benchmark_nav)

@@ -77,6 +77,7 @@ class R2DataLoader:
             bucket = os.getenv('R2_BUCKET_NAME')
             data_path = os.getenv('R2_NAV_DATA_PATH')
             metadata_path = os.getenv('R2_MF_METADATA_PATH')
+            benchmark_path = os.getenv('R2_MF_BENCHMARK_DATA_PATH')
             self.conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS mf_nav_daily_long AS
                 SELECT * FROM read_parquet('s3://{bucket}/{data_path}')
@@ -89,6 +90,12 @@ class R2DataLoader:
                 SELECT * FROM read_parquet('s3://{bucket}/{metadata_path}')
             """)
             print("Table mf_scheme_metadata created successfully.")
+            
+            self.conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS mf_benchmark_daily_long AS
+                SELECT * FROM read_parquet('s3://{bucket}/{benchmark_path}')
+            """)
+            print("Table mf_benchmark_daily_long created successfully.")
 
         except Exception as e:
             print(f"Failed to create tables: {str(e)}")
@@ -158,7 +165,7 @@ class R2DataLoader:
     
     @st.cache_data
     def get_data_date_range(_self):
-        """Get the min and max date available in the dataset""" 
+        """Get the min and max date available in the dataset"""
         if not _self.conn:
             return None, None
         try:
@@ -170,6 +177,65 @@ class R2DataLoader:
         except Exception as e:
             st.error(f"Failed to get data date range: {str(e)}")
             return None, None
+
+    @st.cache_data
+    def get_benchmark_options(_self, index_type=None, index_category=None):
+        """Get available benchmark indices based on filters"""
+        if not _self.conn:
+            return []
+
+        try:
+            query = "SELECT DISTINCT index_name FROM mf_benchmark_daily_long WHERE 1=1"
+
+            if index_type:
+                query += f" AND index_type = '{index_type}'"
+
+            if index_category and index_category != 'ALL':
+                query += f" AND index_category = '{index_category}'"
+
+            query += " ORDER BY index_name"
+
+            result = _self.conn.execute(query).df()
+            return result['index_name'].tolist()
+        except Exception as e:
+            st.error(f"Failed to get benchmark options: {str(e)}")
+            return []
+
+    @st.cache_data
+    def load_benchmark_data(_self, index_name, index_type, start_date=None, end_date=None):
+        """Load benchmark data from R2"""
+        if not _self.conn:
+            return None
+
+        try:
+            query = f"""
+                SELECT date, close as value
+                FROM mf_benchmark_daily_long
+                WHERE index_name = '{index_name}'
+                  AND index_type = '{index_type}'
+            """
+
+            if start_date:
+                query += f" AND date >= '{start_date}'"
+            if end_date:
+                query += f" AND date <= '{end_date}'"
+
+            query += " ORDER BY date"
+
+            df = _self.conn.execute(query).df()
+
+            if df.empty:
+                return None
+
+            # Convert to series with date index
+            df['date'] = pd.to_datetime(df['date'])
+            df.set_index('date', inplace=True)
+
+            return df['value']
+
+        except Exception as e:
+            st.error(f"Failed to load benchmark data: {str(e)}")
+            return None
 
 # Initialize global data loader
 @st.cache_resource
