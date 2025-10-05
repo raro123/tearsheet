@@ -108,13 +108,16 @@ class R2DataLoader:
             return None
 
         try:
-            # Get unique fund schemes with category information, prioritizing popular/recent ones
+            # Get unique fund schemes with category information, filtering for growth plans only
             query = f"""
                 SELECT * FROM mf_scheme_metadata
+                WHERE is_growth_plan = true
             """
 
             result = _self.conn.execute(query).df()
-            result['display_name'] = result['scheme_name'] + ' |' + result['scheme_code'].astype(str)
+            # Add plan type (Direct/Regular) to display name
+            result['plan_type'] = result['is_direct'].apply(lambda x: 'Direct' if x else 'Regular')
+            result['display_name'] = result['scheme_name'] + ' - ' + result['plan_type'] + ' |' + result['scheme_code'].astype(str)
             return result
         except Exception as e:
             st.error(f"Failed to get available funds: {str(e)}")
@@ -128,13 +131,20 @@ class R2DataLoader:
             return None
 
         try:
-            # Build the query to get the long format data
+            # Build the query to get the long format data with plan type from metadata
             scheme_codes = tuple(code.split('|')[1] for code in selected_fund_schemes)
             query = f"""
-                SELECT * FROM mf_nav_daily_long
-                WHERE date >= '{start_date}'
-                  AND date <= '{end_date}'
-                  AND scheme_code IN {scheme_codes}
+                SELECT
+                    nav.date,
+                    nav.scheme_code,
+                    nav.scheme_name,
+                    nav.nav,
+                    CASE WHEN meta.is_direct THEN 'Direct' ELSE 'Regular' END as plan_type
+                FROM mf_nav_daily_long nav
+                LEFT JOIN mf_scheme_metadata meta ON nav.scheme_code = meta.scheme_code
+                WHERE nav.date >= '{start_date}'
+                  AND nav.date <= '{end_date}'
+                  AND nav.scheme_code IN {scheme_codes}
             """
             df_long = _self.conn.execute(query).df()
 
@@ -143,11 +153,10 @@ class R2DataLoader:
 
             # Convert date to datetime
             df_long['date'] = pd.to_datetime(df_long['date'])
-            df_long['display_name'] = df_long['scheme_name'] + ' |' + df_long['scheme_code'].astype(str)
+            # Create display name with plan type to match selection format
+            df_long['display_name'] = df_long['scheme_name'] + ' - ' + df_long['plan_type'] + ' |' + df_long['scheme_code'].astype(str)
 
-            print('here')
-
-            # Pivot from long to wide format - use scheme_name as columns
+            # Pivot from long to wide format - use display_name as columns
             df_wide = df_long.pivot(index='date', columns='display_name', values='nav')
 
             # Drop columns with all NaN values
@@ -157,7 +166,7 @@ class R2DataLoader:
             df_wide = df_wide.sort_index()
 
             return df_wide
-            
+
 
         except Exception as e:
             st.error(f"Failed to load fund data: {str(e)}")
@@ -176,6 +185,44 @@ class R2DataLoader:
             return min_date, max_date
         except Exception as e:
             st.error(f"Failed to get data date range: {str(e)}")
+            return None, None
+
+    @st.cache_data
+    def get_fund_date_range(_self, scheme_code):
+        """Get the min and max date for a specific fund"""
+        if not _self.conn:
+            return None, None
+        try:
+            query = f"""
+                SELECT MIN(date) AS min_date, MAX(date) AS max_date
+                FROM mf_nav_daily_long
+                WHERE scheme_code = '{scheme_code}'
+            """
+            result = _self.conn.execute(query).df()
+            min_date = pd.to_datetime(result['min_date'].iloc[0]).date()
+            max_date = pd.to_datetime(result['max_date'].iloc[0]).date()
+            return min_date, max_date
+        except Exception as e:
+            st.error(f"Failed to get fund date range: {str(e)}")
+            return None, None
+
+    @st.cache_data
+    def get_benchmark_date_range(_self, index_name, index_type):
+        """Get the min and max date for a specific benchmark"""
+        if not _self.conn:
+            return None, None
+        try:
+            query = f"""
+                SELECT MIN(date) AS min_date, MAX(date) AS max_date
+                FROM mf_benchmark_daily_long
+                WHERE index_name = '{index_name}' AND index_type = '{index_type}'
+            """
+            result = _self.conn.execute(query).df()
+            min_date = pd.to_datetime(result['min_date'].iloc[0]).date()
+            max_date = pd.to_datetime(result['max_date'].iloc[0]).date()
+            return min_date, max_date
+        except Exception as e:
+            st.error(f"Failed to get benchmark date range: {str(e)}")
             return None, None
 
     @st.cache_data

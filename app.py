@@ -81,6 +81,7 @@ with st.sidebar:
                         .query("scheme_category_level1 == @selected_category_level1")
                         .scheme_category_level2.unique().tolist()
                         )
+    categories_level2 = ["ALL"] + categories_level2
 
     # Category filter - Level 2 (required selection)
     selected_category_level2 = st.selectbox(
@@ -94,10 +95,16 @@ with st.sidebar:
     st.subheader("📈 Fund Selection")
 
     # Create display options for selectbox
-    fund_options = (all_funds
-            .query("scheme_category_level1 == @selected_category_level1 and scheme_category_level2 == @selected_category_level2")
-            ['display_name'].tolist()
-            )
+    if selected_category_level2 == "ALL":
+        fund_options = (all_funds
+                .query("scheme_category_level1 == @selected_category_level1")
+                ['display_name'].tolist()
+                )
+    else:
+        fund_options = (all_funds
+                .query("scheme_category_level1 == @selected_category_level1 and scheme_category_level2 == @selected_category_level2")
+                ['display_name'].tolist()
+                )
     selected_fund_scheme = st.selectbox(
         "Strategy Fund",
         fund_options,
@@ -144,21 +151,32 @@ with st.sidebar:
     st.subheader("📅 Analysis Period")
     col1, col2 = st.columns(2)
 
-    min_date, max_date = data_loader.get_data_date_range()
+    # Get date ranges for fund and benchmark
+    fund_scheme_code = selected_fund_scheme.split('|')[1]
+    fund_min_date, fund_max_date = data_loader.get_fund_date_range(fund_scheme_code)
+    benchmark_min_date, benchmark_max_date = data_loader.get_benchmark_date_range(selected_benchmark_index, index_type)
+
+    # Calculate common/overlapping date range
+    common_min_date = max(fund_min_date, benchmark_min_date) if fund_min_date and benchmark_min_date else None
+    common_max_date = min(fund_max_date, benchmark_max_date) if fund_max_date and benchmark_max_date else None
+
+    # Use overall range as bounds, common range as default values
+    overall_min_date, overall_max_date = data_loader.get_data_date_range()
+
     with col1:
         start_date = st.date_input(
             "Start Date",
-            value=min_date,
-            min_value=min_date,
-            max_value=max_date
+            value=common_min_date if common_min_date else overall_min_date,
+            min_value=overall_min_date,
+            max_value=overall_max_date
         )
 
     with col2:
         end_date = st.date_input(
             "End Date",
-            value=max_date,
-            min_value=min_date,
-            max_value=max_date
+            value=common_max_date if common_max_date else overall_max_date,
+            min_value=overall_min_date,
+            max_value=overall_max_date
         )
 
     period_desc = get_period_description(pd.Timestamp(start_date), pd.Timestamp(end_date))
@@ -221,7 +239,7 @@ benchmark_metrics = calculate_all_metrics(benchmark_returns, risk_free_rate=risk
 # Main Content Area
 
 # Summary Cards
-st.header("📊 Performance Summary")
+st.header(f"📊 Performance Summary ({strategy_name} vs {benchmark_name})")
 col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
@@ -332,12 +350,36 @@ with col_right:
     # Metrics Table
     st.subheader("📊 Performance Metrics")
 
-    metrics_df = create_metrics_comparison_df(strategy_metrics, benchmark_metrics)
+    # Get data period information
+    strategy_data_start = strategy_nav.index.min().strftime('%Y-%m-%d')
+    strategy_data_end = strategy_nav.index.max().strftime('%Y-%m-%d')
+    benchmark_data_start = benchmark_nav.index.min().strftime('%Y-%m-%d')
+    benchmark_data_end = benchmark_nav.index.max().strftime('%Y-%m-%d')
+
+    # Use shorter format for display
+    strategy_data_period = f"{strategy_data_start} to {strategy_data_end}"
+    benchmark_data_period = f"{benchmark_data_start} to {benchmark_data_end}"
+    comparison_period = f"{start_date} to {end_date}"
+
+    # Shorten fund names for display if too long
+    strategy_display = strategy_name if len(strategy_name) <= 40 else strategy_name[:37] + "..."
+    benchmark_display = benchmark_name if len(benchmark_name) <= 40 else benchmark_name[:37] + "..."
+
+    metrics_df = create_metrics_comparison_df(
+        strategy_metrics, benchmark_metrics,
+        strategy_name=strategy_display,
+        benchmark_name=benchmark_display,
+        strategy_data_period=strategy_data_period,
+        benchmark_data_period=benchmark_data_period,
+        comparison_period=comparison_period
+    )
 
     # Apply styling to the metrics table
     def highlight_section_headers(row):
         if '──' in str(row['Metric']):
             return ['background-color: #1F2937; color: white; font-weight: bold'] * len(row)
+        elif row['Metric'] in ['Name', 'Data Period', 'Comparison Period']:
+            return ['background-color: #374151; color: white; font-weight: bold'] * len(row)
         return [''] * len(row)
 
     styled_metrics = metrics_df.style.apply(highlight_section_headers, axis=1)
@@ -346,7 +388,7 @@ with col_right:
         styled_metrics,
         hide_index=True,
         use_container_width=True,
-        height=1000,
+        height=1200,
         column_config={
             "Metric": st.column_config.TextColumn(
                 "Metric",

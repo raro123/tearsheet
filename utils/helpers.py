@@ -16,7 +16,8 @@ def format_metric_value(metric_name, value):
     else:
         return f"{value:.2f}"
 
-def create_metrics_comparison_df(strategy_metrics, benchmark_metrics):
+def create_metrics_comparison_df(strategy_metrics, benchmark_metrics, strategy_name=None, benchmark_name=None,
+                                  strategy_data_period=None, benchmark_data_period=None, comparison_period=None):
     """Create formatted dataframe for metrics comparison with sections"""
 
     # Define metric categories
@@ -37,6 +38,19 @@ def create_metrics_comparison_df(strategy_metrics, benchmark_metrics):
     ]
 
     metrics_data = []
+
+    # Add metadata rows at the top
+    if strategy_name and benchmark_name:
+        metrics_data.append({'Metric': 'Name', 'Strategy': strategy_name, 'Benchmark': benchmark_name})
+
+    if strategy_data_period and benchmark_data_period:
+        metrics_data.append({'Metric': 'Data Period', 'Strategy': strategy_data_period, 'Benchmark': benchmark_data_period})
+
+    if comparison_period:
+        metrics_data.append({'Metric': 'Comparison Period', 'Strategy': comparison_period, 'Benchmark': comparison_period})
+
+    if any([strategy_name, strategy_data_period, comparison_period]):
+        metrics_data.append({'Metric': '', 'Strategy': '', 'Benchmark': ''})  # Blank row separator
 
     # Add Return Metrics section
     metrics_data.append({'Metric': '── RETURN METRICS ──', 'Strategy': '', 'Benchmark': ''})
