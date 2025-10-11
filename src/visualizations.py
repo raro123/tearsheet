@@ -367,3 +367,296 @@ def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_na
     )
 
     return fig
+
+def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_name):
+    """Create equity curves for multiple funds in a category
+
+    Args:
+        returns_dict: Dictionary {fund_name: returns_series}
+        benchmark_returns: Series with benchmark returns
+        benchmark_name: String name of benchmark
+
+    Returns:
+        Plotly figure
+    """
+    fig = go.Figure()
+
+    # Color palette for funds
+    colors = [
+        '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899',
+        '#06b6d4', '#f97316', '#84cc16', '#6366f1', '#14b8a6'
+    ]
+
+    # Add each fund's equity curve
+    for idx, (fund_name, returns) in enumerate(returns_dict.items()):
+        cum_returns = (1 + returns).cumprod()
+        color = colors[idx % len(colors)]
+
+        fig.add_trace(go.Scatter(
+            x=cum_returns.index,
+            y=(cum_returns - 1) * 100,
+            name=fund_name,
+            line=dict(color=color, width=1.5),
+            hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Return: %{y:.2f}%<extra></extra>',
+            opacity=0.7
+        ))
+
+    # Add benchmark (thicker, distinct line)
+    benchmark_cum = (1 + benchmark_returns).cumprod()
+    fig.add_trace(go.Scatter(
+        x=benchmark_cum.index,
+        y=(benchmark_cum - 1) * 100,
+        name=f"🔷 {benchmark_name}",
+        line=dict(color='#000000', width=3, dash='dash'),
+        hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Return: %{y:.2f}%<extra></extra>'
+    ))
+
+    fig.update_layout(
+        title=dict(text="Category Equity Curves - Cumulative Returns", font=dict(size=18, weight='bold')),
+        xaxis_title="Date",
+        yaxis_title="Cumulative Return (%)",
+        hovermode='closest',
+        height=600,
+        template='plotly_white',
+        showlegend=False
+    )
+
+    return fig
+
+def create_bubble_scatter_chart(metrics_df, x_metric, y_metric, size_metric, fund_name_col='Fund',
+                                 benchmark_x=None, benchmark_y=None):
+    """Create bubble scatter chart with customizable metrics
+
+    Args:
+        metrics_df: DataFrame with fund metrics (including fund name column)
+        x_metric: Column name for X-axis
+        y_metric: Column name for Y-axis
+        size_metric: Column name for bubble size
+        fund_name_col: Name of column containing fund names
+        benchmark_x: Benchmark value for X-axis (adds vertical reference line)
+        benchmark_y: Benchmark value for Y-axis (adds horizontal reference line)
+
+    Returns:
+        Plotly figure
+    """
+    # Prepare data
+    df = metrics_df.copy()
+
+    # Handle percentage metrics - convert to numeric if needed
+    for col in [x_metric, y_metric, size_metric]:
+        if df[col].dtype == 'object':
+            # Remove % signs and convert
+            df[col] = pd.to_numeric(df[col].astype(str).str.rstrip('%'), errors='coerce')
+
+    # Remove rows with NaN in key metrics
+    df = df.dropna(subset=[x_metric, y_metric, size_metric])
+
+    # Normalize size metric for bubble sizing (scale 5-50)
+    size_values = df[size_metric].values
+    if size_values.max() != size_values.min():
+        normalized_sizes = 5 + 45 * (size_values - size_values.min()) / (size_values.max() - size_values.min())
+    else:
+        normalized_sizes = [25] * len(size_values)
+
+    # Create color scale based on fund names
+    unique_funds = df[fund_name_col].unique()
+    color_palette = [
+        '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899',
+        '#06b6d4', '#f97316', '#84cc16', '#6366f1', '#14b8a6'
+    ]
+    color_map = {fund: color_palette[i % len(color_palette)] for i, fund in enumerate(unique_funds)}
+    colors = df[fund_name_col].map(color_map)
+
+    # Create hover text with all metrics
+    hover_texts = []
+    for _, row in df.iterrows():
+        text = f"<b>{row[fund_name_col]}</b><br>"
+        text += f"{x_metric}: {row[x_metric]:.2f}<br>"
+        text += f"{y_metric}: {row[y_metric]:.2f}<br>"
+        text += f"{size_metric}: {row[size_metric]:.2f}"
+        hover_texts.append(text)
+
+    fig = go.Figure()
+
+    # Add scatter points
+    fig.add_trace(go.Scatter(
+        x=df[x_metric],
+        y=df[y_metric],
+        mode='markers',
+        marker=dict(
+            size=normalized_sizes,
+            color=colors,
+            line=dict(width=1, color='white'),
+            opacity=0.7
+        ),
+        text=hover_texts,
+        hovertemplate='%{text}<extra></extra>',
+        showlegend=False
+    ))
+
+    # Add fund name annotations for clarity (optional, for top performers)
+    if len(df) <= 15:  # Only annotate if not too many funds
+        for _, row in df.iterrows():
+            fig.add_annotation(
+                x=row[x_metric],
+                y=row[y_metric],
+                text=row[fund_name_col][:20],  # Truncate long names
+                showarrow=False,
+                font=dict(size=8),
+                opacity=0.6,
+                yshift=10
+            )
+
+    # Add benchmark reference lines if provided
+    if benchmark_x is not None:
+        # Vertical line for X-axis benchmark
+        fig.add_vline(
+            x=benchmark_x,
+            line_dash="dash",
+            line_color="red",
+            line_width=2,
+            annotation_text="Benchmark",
+            annotation_position="top"
+        )
+
+    if benchmark_y is not None:
+        # Horizontal line for Y-axis benchmark
+        fig.add_hline(
+            y=benchmark_y,
+            line_dash="dash",
+            line_color="red",
+            line_width=2,
+            annotation_text="Benchmark",
+            annotation_position="right"
+        )
+
+    fig.update_layout(
+        title=dict(
+            text=f"Fund Comparison: {x_metric} vs {y_metric} (Size: {size_metric})",
+            font=dict(size=18, weight='bold')
+        ),
+        xaxis_title=x_metric,
+        yaxis_title=y_metric,
+        height=600,
+        template='plotly_white',
+        hovermode='closest',
+        xaxis=dict(showgrid=True, gridwidth=1, gridcolor='lightgray'),
+        yaxis=dict(showgrid=True, gridwidth=1, gridcolor='lightgray')
+    )
+
+    return fig
+
+def create_rolling_metric_chart(returns_dict, benchmark_returns, benchmark_name,
+                                  metric_type, window, risk_free_rate=0.0249, window_label=None):
+    """Create rolling metric chart for multiple funds
+
+    Args:
+        returns_dict: Dictionary {fund_name: returns_series}
+        benchmark_returns: Series with benchmark returns
+        benchmark_name: String name of benchmark
+        metric_type: "Return", "Volatility", "Sharpe", or "Drawdown"
+        window: Rolling window size in days
+        risk_free_rate: Risk-free rate for Sharpe calculation
+        window_label: Optional custom label for window (e.g., "1 Year", "3 Years")
+
+    Returns:
+        Plotly figure
+    """
+    TRADING_DAYS = 252
+    fig = go.Figure()
+
+    # Color palette
+    colors = [
+        '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899',
+        '#06b6d4', '#f97316', '#84cc16', '#6366f1', '#14b8a6'
+    ]
+
+    def calculate_rolling_metric(returns, metric_type, window):
+        """Calculate rolling metric based on type"""
+        if metric_type == "Return":
+            # Annualized rolling return
+            return returns.rolling(window).apply(lambda x: (1 + x).prod() - 1) * (TRADING_DAYS / window) * 100
+        elif metric_type == "Volatility":
+            # Annualized rolling volatility
+            return returns.rolling(window).std() * np.sqrt(TRADING_DAYS) * 100
+        elif metric_type == "Sharpe":
+            # Rolling Sharpe ratio
+            rolling_mean = returns.rolling(window).mean() * TRADING_DAYS
+            rolling_std = returns.rolling(window).std() * np.sqrt(TRADING_DAYS)
+            return (rolling_mean - risk_free_rate) / rolling_std
+        elif metric_type == "Drawdown":
+            # Rolling max drawdown
+            rolling_dd = []
+            for i in range(len(returns)):
+                if i < window:
+                    rolling_dd.append(np.nan)
+                else:
+                    window_returns = returns.iloc[i-window:i]
+                    cum_returns = (1 + window_returns).cumprod()
+                    running_max = cum_returns.expanding().max()
+                    dd = ((cum_returns - running_max) / running_max * 100).min()
+                    rolling_dd.append(dd)
+            return pd.Series(rolling_dd, index=returns.index)
+        else:
+            raise ValueError(f"Unknown metric type: {metric_type}")
+
+    # Plot each fund
+    for idx, (fund_name, returns) in enumerate(returns_dict.items()):
+        metric_values = calculate_rolling_metric(returns, metric_type, window)
+        color = colors[idx % len(colors)]
+
+        fig.add_trace(go.Scatter(
+            x=metric_values.index,
+            y=metric_values,
+            name=fund_name,
+            line=dict(color=color, width=1.5),
+            hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Value: %{y:.2f}<extra></extra>',
+            opacity=0.7
+        ))
+
+    # Add benchmark
+    benchmark_metric = calculate_rolling_metric(benchmark_returns, metric_type, window)
+    fig.add_trace(go.Scatter(
+        x=benchmark_metric.index,
+        y=benchmark_metric,
+        name=f"🔷 {benchmark_name}",
+        line=dict(color='#000000', width=3, dash='dash'),
+        hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Value: %{y:.2f}<extra></extra>'
+    ))
+
+    # Determine Y-axis label and title
+    y_labels = {
+        "Return": "Annualized Return (%)",
+        "Volatility": "Annualized Volatility (%)",
+        "Sharpe": "Sharpe Ratio",
+        "Drawdown": "Max Drawdown (%)"
+    }
+
+    # Determine window label
+    if window_label:
+        period_text = window_label
+    else:
+        # Default labels based on common windows
+        if window == 252:
+            period_text = "1 Year"
+        elif window == 756:
+            period_text = "3 Years"
+        elif window == 1260:
+            period_text = "5 Years"
+        else:
+            period_text = f"{window} days"
+
+    fig.update_layout(
+        title=dict(
+            text=f"Rolling {metric_type} ({period_text})",
+            font=dict(size=18, weight='bold')
+        ),
+        xaxis_title="Date",
+        yaxis_title=y_labels.get(metric_type, metric_type),
+        hovermode='closest',
+        height=500,
+        template='plotly_white',
+        showlegend=False
+    )
+
+    return fig
