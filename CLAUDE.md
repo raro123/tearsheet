@@ -37,11 +37,13 @@ uv run ruff check .
 ## Architecture
 
 ### Data Flow
-1. **R2DataLoader** (src/data_loader.py): Connects to Cloudflare R2 via DuckDB, creates local tables from parquet files
+1. **R2DataLoader** (src/data_loader.py): Connects to Cloudflare R2 via DuckDB, creates in-memory tables from parquet files
    - Uses DuckDB's httpfs extension with S3-compatible R2 API
-   - Loads `mf_nav_daily_long` (NAV data in long format) and `mf_scheme_metadata` tables
+   - Loads `mf_nav_daily_long` (NAV data in long format), `mf_scheme_metadata`, and `mf_benchmark_daily_long` tables
    - Pivots long-format data to wide format for analysis
-   - Caching via `@st.cache_data` and `@st.cache_resource`
+   - In-memory database with Streamlit caching (24-hour TTL by default)
+   - Auto-refresh: Data automatically reloads from R2 after cache expires
+   - Configurable cache TTL via `CACHE_TTL_HOURS` environment variable
 
 2. **Main App** (app.py): Streamlit UI orchestrating data loading, filtering, and visualization
    - User selects fund categories (Level 1 & 2), specific funds, and date ranges
@@ -73,8 +75,9 @@ uv run ruff check .
 
 ### Environment Variables Required
 
-The application requires R2 credentials in a `.env` file:
+The application requires R2 credentials and configuration in a `.env` file:
 ```
+# R2 Connection
 R2_ACCESS_KEY_ID=your_access_key
 R2_SECRET_ACCESS_KEY=your_secret_key
 R2_ENDPOINT_URL=your_account_id.r2.cloudflarestorage.com
@@ -83,6 +86,10 @@ R2_ACCOUNT_ID=your_account_id
 R2_BUCKET_NAME=your_bucket_name
 R2_NAV_DATA_PATH=path/to/nav_data.parquet
 R2_MF_METADATA_PATH=path/to/metadata.parquet
+R2_MF_BENCHMARK_DATA_PATH=path/to/benchmark_data.parquet
+
+# Cache Configuration
+CACHE_TTL_HOURS=24  # Data cache TTL in hours (default: 24)
 ```
 
 ### Constants
