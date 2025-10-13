@@ -16,41 +16,41 @@ class R2DataLoader:
         self._setup_connection()
 
     def _setup_connection(self):
-        """Setup DuckDB connection with R2 configuration"""
+        """Setup DuckDB in-memory connection with R2 configuration"""
         try:
-            with duckdb.connect() as conn:
-                self.conn = duckdb.connect('./data/mf_data.db')
+            # Use in-memory database instead of persistent file
+            self.conn = duckdb.connect(':memory:')
 
-                # Install and load httpfs extension for S3/R2 support
-                self.conn.execute("INSTALL httpfs;")
-                self.conn.execute("LOAD httpfs;")
+            # Install and load httpfs extension for S3/R2 support
+            self.conn.execute("INSTALL httpfs;")
+            self.conn.execute("LOAD httpfs;")
 
-                # Configure R2 connection
-                r2_config = {
-                    'key_id': os.getenv('R2_ACCESS_KEY_ID'),
-                    'secret': os.getenv('R2_SECRET_ACCESS_KEY'),
-                    'endpoint': os.getenv('R2_ENDPOINT_URL'),
-                    'region': os.getenv('R2_REGION', 'auto'),
-                    'account_id': os.getenv('R2_ACCOUNT_ID')
-                }
+            # Configure R2 connection
+            r2_config = {
+                'key_id': os.getenv('R2_ACCESS_KEY_ID'),
+                'secret': os.getenv('R2_SECRET_ACCESS_KEY'),
+                'endpoint': os.getenv('R2_ENDPOINT_URL'),
+                'region': os.getenv('R2_REGION', 'auto'),
+                'account_id': os.getenv('R2_ACCOUNT_ID')
+            }
 
-                # Clean endpoint URL - remove protocol if present
-                if r2_config['endpoint']:
-                    endpoint = r2_config['endpoint'].replace('https://', '').replace('http://', '')
-                    r2_config['endpoint'] = endpoint
+            # Clean endpoint URL - remove protocol if present
+            if r2_config['endpoint']:
+                endpoint = r2_config['endpoint'].replace('https://', '').replace('http://', '')
+                r2_config['endpoint'] = endpoint
 
-                # Set S3 configuration for R2 using DuckDB SECRET
-                self.conn.execute(f"""
-                    CREATE OR REPLACE SECRET r2_secret (
-                        TYPE S3,
-                        KEY_ID '{r2_config['key_id']}',
-                        SECRET '{r2_config['secret']}',
-                        ENDPOINT '{r2_config['endpoint']}',
-                        URL_STYLE 'path',
-                        USE_SSL true
-                    )
-                """)
-                
+            # Set S3 configuration for R2 using DuckDB SECRET
+            self.conn.execute(f"""
+                CREATE OR REPLACE SECRET r2_secret (
+                    TYPE S3,
+                    KEY_ID '{r2_config['key_id']}',
+                    SECRET '{r2_config['secret']}',
+                    ENDPOINT '{r2_config['endpoint']}',
+                    URL_STYLE 'path',
+                    USE_SSL true
+                )
+            """)
+
         except Exception as e:
                 st.error(f"Failed to setup R2 connection: {str(e)}")
                 self.conn = None
@@ -69,33 +69,52 @@ class R2DataLoader:
         except Exception as e:
             return False, f"Connection failed: {str(e)}"
 
-    def create_db_tables(self):
-        """Create local DuckDB table from R2 data"""
-        if not self.conn:
+    @st.cache_resource(ttl=86400)  # Cache for 24 hours (configurable via CACHE_TTL_HOURS env var)
+    def create_db_tables(_self):
+        """Create in-memory DuckDB tables from R2 data with TTL-based caching
+
+        This method is cached by Streamlit with a 24-hour TTL (Time To Live).
+        After 24 hours, the cache expires and data is automatically refreshed from R2.
+        """
+        if not _self.conn:
             print("No connection established")
+            return
+
         try:
+            # Get cache TTL from environment (in hours), default 24 hours
+            cache_ttl_hours = int(os.getenv('CACHE_TTL_HOURS', '24'))
+
             bucket = os.getenv('R2_BUCKET_NAME')
             data_path = os.getenv('R2_NAV_DATA_PATH')
             metadata_path = os.getenv('R2_MF_METADATA_PATH')
             benchmark_path = os.getenv('R2_MF_BENCHMARK_DATA_PATH')
-            self.conn.execute(f"""
+
+            print(f"Loading data from R2 (cache TTL: {cache_ttl_hours} hours)...")
+
+            # Create tables from R2 parquet files
+            _self.conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS mf_nav_daily_long AS
                 SELECT * FROM read_parquet('s3://{bucket}/{data_path}')
             """)
-            
             print("Table mf_nav_daily_long created successfully.")
-            
-            self.conn.execute(f"""
+
+            _self.conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS mf_scheme_metadata AS
                 SELECT * FROM read_parquet('s3://{bucket}/{metadata_path}')
             """)
             print("Table mf_scheme_metadata created successfully.")
-            
-            self.conn.execute(f"""
+
+            _self.conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS mf_benchmark_daily_long AS
                 SELECT * FROM read_parquet('s3://{bucket}/{benchmark_path}')
             """)
             print("Table mf_benchmark_daily_long created successfully.")
+
+            # Log data freshness
+            max_date = _self.conn.execute("""
+                SELECT MAX(date) FROM mf_nav_daily_long
+            """).fetchone()[0]
+            print(f"Data loaded successfully. Latest NAV date: {max_date}")
 
         except Exception as e:
             print(f"Failed to create tables: {str(e)}")
@@ -287,7 +306,11 @@ class R2DataLoader:
 # Initialize global data loader
 @st.cache_resource
 def get_data_loader():
-    """Get or create the R2 data loader instance"""
+    """Get or create the R2 data loader instance with caching
+
+    Uses Streamlit's cache_resource to ensure a single data loader instance
+    is shared across all sessions and cached in memory.
+    """
     return R2DataLoader()
 
 # Legacy function compatibility
