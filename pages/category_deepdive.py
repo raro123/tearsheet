@@ -10,7 +10,8 @@ from src.visualizations import (
     create_category_equity_curves,
     create_annual_returns_bubble_chart,
     create_bubble_scatter_chart,
-    create_rolling_metric_chart
+    create_rolling_metric_chart,
+    create_performance_ranking_grid
 )
 from src.shared_components import (
     render_date_range_selector,
@@ -288,6 +289,42 @@ def render(data_loader):
             metric_type, window, risk_free_rate, window_label=window_label
         )
         st.plotly_chart(fig4, use_container_width=True)
+
+        st.markdown("---")
+
+        # Chart 5: Performance Ranking Grid
+        st.subheader("🏆 Performance Ranking Grid")
+        st.caption("Visual ranking of funds by year with embedded metrics")
+
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            ranking_mode = st.radio(
+                "Ranking Mode",
+                options=['annual', 'cumulative'],
+                format_func=lambda x: 'Annual (Rank by each year)' if x == 'annual' else 'Cumulative (Rank from start to year end)',
+                index=0,
+                horizontal=True,
+                key="ranking_mode"
+            )
+
+        with col2:
+            max_funds_display = st.slider(
+                "Max Funds",
+                min_value=5,
+                max_value=30,
+                value=20,
+                step=5,
+                key="max_funds_grid"
+            )
+
+        fig5 = create_performance_ranking_grid(
+            funds_returns, benchmark_returns, benchmark_name,
+            start_date, end_date, risk_free_rate,
+            ranking_mode=ranking_mode,
+            max_funds=max_funds_display
+        )
+        st.plotly_chart(fig5, use_container_width=True)
 
         st.markdown("---")
 

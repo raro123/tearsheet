@@ -683,6 +683,236 @@ def create_bubble_scatter_chart(metrics_df, x_metric, y_metric, size_metric, fun
 
     return fig
 
+def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_name,
+                                     start_date, end_date, risk_free_rate=0.0249,
+                                     ranking_mode='annual', max_funds=20):
+    """Create performance ranking grid showing fund rankings by year
+
+    Args:
+        returns_dict: Dictionary {fund_name: returns_series}
+        benchmark_returns: Series with benchmark returns
+        benchmark_name: String name of benchmark
+        start_date: Start date for analysis (can be date or Timestamp)
+        end_date: End date for analysis (can be date or Timestamp)
+        risk_free_rate: Risk-free rate for Sharpe calculation
+        ranking_mode: 'annual' (rank by year) or 'cumulative' (rank by cumulative performance)
+        max_funds: Maximum number of funds to display (top N)
+
+    Returns:
+        Plotly figure
+    """
+    import pandas as pd
+    import numpy as np
+    import plotly.graph_objects as go
+    from src.metrics import calculate_sharpe_ratio, calculate_max_drawdown, calculate_cagr
+
+    # Convert dates to Timestamps to ensure compatibility
+    start_date = pd.Timestamp(start_date)
+    end_date = pd.Timestamp(end_date)
+
+    # Get all unique years in the date range
+    years = pd.date_range(start=start_date, end=end_date, freq='YE').year.unique()
+
+    if len(years) == 0:
+        # Handle single year case
+        years = [pd.Timestamp(end_date).year]
+
+    # Calculate metrics for each fund for each year
+    fund_year_data = []
+
+    for fund_name, returns in returns_dict.items():
+        for year in years:
+            year_start = pd.Timestamp(f"{year}-01-01")
+            year_end = pd.Timestamp(f"{year}-12-31")
+
+            if ranking_mode == 'annual':
+                # Annual mode: metrics for just this year
+                year_returns = returns[(returns.index >= year_start) & (returns.index <= year_end)]
+            else:
+                # Cumulative mode: metrics from start_date to end of this year
+                year_returns = returns[(returns.index >= start_date) & (returns.index <= year_end)]
+
+            if len(year_returns) > 20:  # Need minimum data points
+                # Calculate annual CAGR
+                total_return = (1 + year_returns).prod() - 1
+                if ranking_mode == 'annual':
+                    years_period = len(year_returns) / 252
+                else:
+                    years_period = (year_end - pd.Timestamp(start_date)).days / 365.25
+
+                if years_period > 0:
+                    cagr = ((1 + total_return) ** (1 / years_period) - 1) * 100
+                else:
+                    continue
+
+                # Calculate other metrics
+                volatility = year_returns.std() * np.sqrt(252) * 100
+                sharpe = calculate_sharpe_ratio(year_returns, risk_free_rate)
+                max_dd = calculate_max_drawdown(year_returns) * 100
+
+                fund_year_data.append({
+                    'Fund': fund_name,
+                    'Year': year,
+                    'CAGR': cagr,
+                    'Sharpe': sharpe,
+                    'Volatility': volatility,
+                    'Max DD': max_dd
+                })
+
+    # Add benchmark data
+    for year in years:
+        year_start = pd.Timestamp(f"{year}-01-01")
+        year_end = pd.Timestamp(f"{year}-12-31")
+
+        if ranking_mode == 'annual':
+            year_returns = benchmark_returns[(benchmark_returns.index >= year_start) & (benchmark_returns.index <= year_end)]
+        else:
+            year_returns = benchmark_returns[(benchmark_returns.index >= start_date) & (benchmark_returns.index <= year_end)]
+
+        if len(year_returns) > 20:
+            total_return = (1 + year_returns).prod() - 1
+            if ranking_mode == 'annual':
+                years_period = len(year_returns) / 252
+            else:
+                years_period = (year_end - pd.Timestamp(start_date)).days / 365.25
+
+            if years_period > 0:
+                cagr = ((1 + total_return) ** (1 / years_period) - 1) * 100
+                volatility = year_returns.std() * np.sqrt(252) * 100
+                sharpe = calculate_sharpe_ratio(year_returns, risk_free_rate)
+                max_dd = calculate_max_drawdown(year_returns) * 100
+
+                fund_year_data.append({
+                    'Fund': f"🔷 {benchmark_name}",
+                    'Year': year,
+                    'CAGR': cagr,
+                    'Sharpe': sharpe,
+                    'Volatility': volatility,
+                    'Max DD': max_dd
+                })
+
+    df = pd.DataFrame(fund_year_data)
+
+    if df.empty:
+        # Return empty figure with message
+        fig = go.Figure()
+        fig.add_annotation(
+            text="Insufficient data for ranking grid",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=16)
+        )
+        return fig
+
+    # Rank funds by CAGR for each year (break ties by fund name for consistency)
+    df['Rank'] = df.groupby('Year')['CAGR'].rank(ascending=False, method='first').astype(int)
+
+    # Limit to top N funds (based on average rank)
+    top_funds = df.groupby('Fund')['Rank'].mean().nsmallest(max_funds).index
+    df = df[df['Fund'].isin(top_funds)]
+
+    # Get unique ranks that appear in the filtered data
+    unique_ranks = sorted(df['Rank'].unique())
+
+    # Create a mapping for consecutive rank display
+    rank_mapping = {old_rank: new_rank for new_rank, old_rank in enumerate(unique_ranks, start=1)}
+    df['Display_Rank'] = df['Rank'].map(rank_mapping)
+
+    # Create pivot for heatmap (Display_Rank x Year -> CAGR for coloring)
+    pivot_cagr = df.pivot(index='Display_Rank', columns='Year', values='CAGR')
+
+    # Sort by rank
+    pivot_cagr = pivot_cagr.sort_index()
+
+    # Create annotations with fund name and metrics
+    annotations = []
+
+    for display_rank in pivot_cagr.index:
+        for year in pivot_cagr.columns:
+            # Get fund data for this display rank and year
+            fund_data = df[(df['Display_Rank'] == display_rank) & (df['Year'] == year)]
+
+            if not fund_data.empty:
+                row = fund_data.iloc[0]
+                fund_name = row['Fund']
+
+                # Truncate long fund names
+                display_name = fund_name.split(' - ')[0] if ' - ' in fund_name else fund_name
+                if len(display_name) > 20:
+                    display_name = display_name[:17] + '...'
+
+                # Create multi-line annotation
+                text = f"<b>{display_name}</b><br>" \
+                       f"CAGR: {row['CAGR']:.1f}%<br>" \
+                       f"SR: {row['Sharpe']:.2f} | DD: {row['Max DD']:.1f}%<br>" \
+                       f"Vol: {row['Volatility']:.1f}%"
+
+                annotations.append(
+                    dict(
+                        x=year,
+                        y=display_rank,
+                        text=text,
+                        showarrow=False,
+                        font=dict(size=9, color='white' if abs(row['CAGR']) > 10 else 'black'),
+                        xref='x',
+                        yref='y'
+                    )
+                )
+
+    # Create heatmap
+    fig = go.Figure(data=go.Heatmap(
+        z=pivot_cagr.values,
+        x=pivot_cagr.columns,
+        y=pivot_cagr.index,
+        colorscale=[
+            [0, '#ef4444'],      # Red for low CAGR
+            [0.5, '#fbbf24'],    # Yellow for medium
+            [1, '#10b981']       # Green for high CAGR
+        ],
+        zmid=0,  # Center colorscale at 0
+        text=pivot_cagr.values,
+        hovertemplate='Year: %{x}<br>Rank: %{y}<br>CAGR: %{z:.2f}%<extra></extra>',
+        colorbar=dict(
+            title=dict(text="CAGR (%)", side="right"),
+            tickmode="linear",
+            tick0=pivot_cagr.min().min(),
+            dtick=(pivot_cagr.max().max() - pivot_cagr.min().min()) / 5
+        )
+    ))
+
+    # Add annotations
+    fig.update_layout(annotations=annotations)
+
+    # Update layout
+    mode_text = "Annual Performance" if ranking_mode == 'annual' else "Cumulative Performance from Start"
+
+    fig.update_layout(
+        title=dict(
+            text=f"Performance Ranking Grid - {mode_text}",
+            font=dict(size=18, weight='bold')
+        ),
+        xaxis_title="Year",
+        yaxis_title="Rank (1 = Best)",
+        height=max(400, len(pivot_cagr.index) * 80),  # Dynamic height based on number of funds
+        template='plotly_white',
+        xaxis=dict(
+            side='top',
+            dtick=1,
+            showgrid=True,
+            gridwidth=2,
+            gridcolor='white'
+        ),
+        yaxis=dict(
+            autorange='reversed',  # Rank 1 at top
+            dtick=1,
+            showgrid=True,
+            gridwidth=2,
+            gridcolor='white'
+        )
+    )
+
+    return fig
+
 def create_rolling_metric_chart(returns_dict, benchmark_returns, benchmark_name,
                                   metric_type, window, risk_free_rate=0.0249, window_label=None):
     """Create rolling metric chart for multiple funds
