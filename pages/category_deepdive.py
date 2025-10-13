@@ -8,6 +8,7 @@ from src.data_loader import calculate_returns
 from src.metrics import calculate_all_metrics
 from src.visualizations import (
     create_category_equity_curves,
+    create_annual_returns_bubble_chart,
     create_bubble_scatter_chart,
     create_rolling_metric_chart
 )
@@ -201,7 +202,7 @@ def render(data_loader):
         st.markdown("---")
 
         # Chart 1: Cumulative Returns - Equity Curves
-        st.subheader("📈 Chart 1: Equity Curves - Cumulative Returns")
+        st.subheader("📈 Equity Curves - Cumulative Returns")
         st.caption("Compare cumulative performance of all funds in the category")
 
         fig1 = create_category_equity_curves(funds_returns, benchmark_returns, benchmark_name)
@@ -209,8 +210,20 @@ def render(data_loader):
 
         st.markdown("---")
 
-        # Chart 2: Bubble Scatter Chart
-        st.subheader("🔵 Chart 2: Multi-Metric Bubble Comparison")
+        # Chart 2: Annual Returns Bubble Chart
+        st.subheader("📊 Annual Returns by Year")
+        st.caption("Bubble size represents annual volatility")
+
+        fig2 = create_annual_returns_bubble_chart(
+            funds_returns, benchmark_returns, benchmark_name,
+            start_date, end_date
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+        st.markdown("---")
+
+        # Chart 3: Bubble Scatter Chart
+        st.subheader("🔵 Multi-Metric Bubble Comparison")
         st.caption("Explore fund relationships across three metrics simultaneously")
 
         # Metric selectors
@@ -237,16 +250,16 @@ def render(data_loader):
         benchmark_x = benchmark_metrics.get(x_metric)
         benchmark_y = benchmark_metrics.get(y_metric)
 
-        fig2 = create_bubble_scatter_chart(
+        fig3 = create_bubble_scatter_chart(
             metrics_df, x_metric, y_metric, size_metric,
             benchmark_x=benchmark_x, benchmark_y=benchmark_y
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig3, use_container_width=True)
 
         st.markdown("---")
 
-        # Chart 3: Rolling Metrics
-        st.subheader("📉 Chart 3: Rolling Metrics Over Time")
+        # Chart 4: Rolling Metrics
+        st.subheader("📉 Rolling Metrics Over Time")
         st.caption("Analyze how fund metrics evolve over rolling time windows")
 
         col1, col2 = st.columns([2, 1])
@@ -270,11 +283,11 @@ def render(data_loader):
             window_label = rolling_period[0]
             window = rolling_period[1]
 
-        fig3 = create_rolling_metric_chart(
+        fig4 = create_rolling_metric_chart(
             funds_returns, benchmark_returns, benchmark_name,
             metric_type, window, risk_free_rate, window_label=window_label
         )
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig4, use_container_width=True)
 
         st.markdown("---")
 

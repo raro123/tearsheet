@@ -423,6 +423,143 @@ def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_nam
 
     return fig
 
+def create_annual_returns_bubble_chart(returns_dict, benchmark_returns, benchmark_name, start_date, end_date):
+    """Create bubble chart showing annual returns over time with volatility as bubble size
+
+    Args:
+        returns_dict: Dictionary {fund_name: returns_series}
+        benchmark_returns: Series with benchmark returns
+        benchmark_name: String name of benchmark
+        start_date: Start date for analysis
+        end_date: End date for analysis
+
+    Returns:
+        Plotly figure
+    """
+    # Calculate annual returns and volatility for each fund
+    all_data = []
+
+    # Process each fund
+    for fund_name, returns in returns_dict.items():
+        # Calculate annual returns
+        annual_returns = returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+
+        # Calculate annual volatility
+        annual_volatility = returns.resample('YE').std() * np.sqrt(252) * 100
+
+        for year in annual_returns.index:
+            all_data.append({
+                'Fund': fund_name,
+                'Year': year.year,
+                'Annual Return': annual_returns[year],
+                'Annual Volatility': annual_volatility[year],
+                'Type': 'Fund'
+            })
+
+    # Add benchmark data
+    benchmark_annual_returns = benchmark_returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+    benchmark_annual_volatility = benchmark_returns.resample('YE').std() * np.sqrt(252) * 100
+
+    for year in benchmark_annual_returns.index:
+        all_data.append({
+            'Fund': f"🔷 {benchmark_name}",
+            'Year': year.year,
+            'Annual Return': benchmark_annual_returns[year],
+            'Annual Volatility': benchmark_annual_volatility[year],
+            'Type': 'Benchmark'
+        })
+
+    # Create DataFrame
+    df = pd.DataFrame(all_data)
+
+    # Color palette
+    colors = [
+        '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899',
+        '#06b6d4', '#f97316', '#84cc16', '#6366f1', '#14b8a6'
+    ]
+
+    fig = go.Figure()
+
+    # Get unique funds (excluding benchmark)
+    funds = [f for f in df['Fund'].unique() if not f.startswith('🔷')]
+
+    # Plot each fund
+    for idx, fund_name in enumerate(funds):
+        fund_data = df[df['Fund'] == fund_name]
+        color = colors[idx % len(colors)]
+
+        fig.add_trace(go.Scatter(
+            x=fund_data['Year'],
+            y=fund_data['Annual Return'],
+            mode='markers',
+            name=fund_name,
+            marker=dict(
+                size=fund_data['Annual Volatility'],
+                sizemode='diameter',
+                sizeref=2,
+                color=color,
+                line=dict(width=1, color='white'),
+                opacity=0.7
+            ),
+            hovertemplate='<b>%{fullData.name}</b><br>' +
+                         'Year: %{x}<br>' +
+                         'Return: %{y:.2f}%<br>' +
+                         'Volatility: %{marker.size:.2f}%' +
+                         '<extra></extra>'
+        ))
+
+    # Plot benchmark with distinct style
+    benchmark_data = df[df['Type'] == 'Benchmark']
+    fig.add_trace(go.Scatter(
+        x=benchmark_data['Year'],
+        y=benchmark_data['Annual Return'],
+        mode='markers',
+        name=f"🔷 {benchmark_name}",
+        marker=dict(
+            size=benchmark_data['Annual Volatility'],
+            sizemode='diameter',
+            sizeref=2,
+            color='#000000',
+            line=dict(width=2, color='red'),
+            opacity=0.9,
+            symbol='diamond'
+        ),
+        hovertemplate='<b>%{fullData.name}</b><br>' +
+                     'Year: %{x}<br>' +
+                     'Return: %{y:.2f}%<br>' +
+                     'Volatility: %{marker.size:.2f}%' +
+                     '<extra></extra>'
+    ))
+
+    fig.update_layout(
+        title=dict(
+            text="Annual Returns by Year (Bubble Size: Annual Volatility)",
+            font=dict(size=18, weight='bold')
+        ),
+        xaxis_title="Year",
+        yaxis_title="Annual Return (%)",
+        height=600,
+        template='plotly_white',
+        showlegend=False,
+        hovermode='closest',
+        xaxis=dict(
+            dtick=1,  # Show every year
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='lightgray'
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='lightgray',
+            zeroline=True,
+            zerolinewidth=2,
+            zerolinecolor='gray'
+        )
+    )
+
+    return fig
+
 def create_bubble_scatter_chart(metrics_df, x_metric, y_metric, size_metric, fund_name_col='Fund',
                                  benchmark_x=None, benchmark_y=None):
     """Create bubble scatter chart with customizable metrics
