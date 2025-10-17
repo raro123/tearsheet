@@ -336,28 +336,95 @@ def render(data_loader):
         benchmark_display = benchmark_metrics.copy()
         benchmark_display['Fund'] = f"🔷 {benchmark_name}"
 
+        # Calculate annual returns for benchmark with common year range
+        # Include all years from start to end (including current year if end_date is in it)
+        all_years = list(range(start_date.year, end_date.year + 1))
+        benchmark_annual_returns = benchmark_returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+
+        # Align benchmark returns to all years
+        aligned_benchmark_returns = []
+        benchmark_years_with_data = []
+        for year in all_years:
+            year_data = benchmark_annual_returns[benchmark_annual_returns.index.year == year]
+            if len(year_data) > 0:
+                aligned_benchmark_returns.append(year_data.iloc[0])
+                benchmark_years_with_data.append(year)
+            else:
+                aligned_benchmark_returns.append(0)
+
+        # Create data range string for benchmark
+        if len(benchmark_years_with_data) > 0:
+            first_year = benchmark_years_with_data[0]
+            last_year = benchmark_years_with_data[-1]
+            if first_year == last_year:
+                benchmark_data_range = str(first_year)
+            else:
+                benchmark_data_range = f"{first_year}-{last_year}"
+        else:
+            benchmark_data_range = "N/A"
+
+        benchmark_display['Annual Return Trend'] = aligned_benchmark_returns
+        benchmark_display['Data Range'] = benchmark_data_range
+
         # Create benchmark DataFrame with Fund column first
         benchmark_df = pd.DataFrame([benchmark_display])
-        cols = ['Fund'] + [col for col in benchmark_df.columns if col != 'Fund']
+
+        # Remove unwanted columns from benchmark
+        columns_to_remove = [
+            'Expected Monthly Return',
+            'Expected Daily Return',
+            'Win Rate',
+            'Max Consecutive Wins',
+            'Skewness',
+            'VaR (95%)',
+            'CVaR (95%)',
+            'R²'
+        ]
+        benchmark_df = benchmark_df.drop(columns=[col for col in columns_to_remove if col in benchmark_df.columns])
+
+        # Reorder columns to put Fund first, then Data Range, then Annual Return Trend
+        cols = ['Fund', 'Data Range', 'Annual Return Trend'] + [col for col in benchmark_df.columns if col not in ['Fund', 'Data Range', 'Annual Return Trend']]
         benchmark_df = benchmark_df[cols]
 
-        # Format benchmark metrics
+        # Convert percentage columns from decimal to percentage (0.1 -> 10.0) for benchmark
         pct_cols = ['Cumulative Return', 'CAGR', 'Volatility (ann.)', 'Max Drawdown']
+        for col in pct_cols:
+            if col in benchmark_df.columns:
+                benchmark_df[col] = benchmark_df[col] * 100
+
+        # Create column config for benchmark
+        benchmark_column_config = {}
+        benchmark_column_config['Data Range'] = st.column_config.TextColumn(
+            'Data Range',
+            help="Date range of available data (YYYY-YYYY format)",
+            width="small"
+        )
+        benchmark_column_config['Annual Return Trend'] = st.column_config.LineChartColumn(
+            'Annual Return Trend',
+            help="Annual returns (%) for each year in the selected period",
+            y_min=-50,
+            y_max=100
+        )
         for col in benchmark_df.columns:
             if col in pct_cols:
-                benchmark_df[col] = benchmark_df[col].apply(lambda x: f"{x*100:.2f}%")
-            elif col not in ['Fund'] and benchmark_df[col].dtype in ['float64', 'int64']:
-                benchmark_df[col] = benchmark_df[col].apply(lambda x: f"{x:.2f}")
+                benchmark_column_config[col] = st.column_config.NumberColumn(
+                    col,
+                    format="%.2f%%",
+                    help=f"{col} as percentage"
+                )
+            elif col not in ['Fund', 'Annual Return Trend'] and benchmark_df[col].dtype in ['float64', 'int64']:
+                benchmark_column_config[col] = st.column_config.NumberColumn(
+                    col,
+                    format="%.2f"
+                )
 
         # Display benchmark table (fixed at top)
         st.markdown("**Benchmark Reference**")
-        styled_benchmark = benchmark_df.style.apply(
-            lambda x: ['background-color: #FEF3C7; font-weight: bold'] * len(x), axis=1
-        )
         st.dataframe(
-            styled_benchmark,
+            benchmark_df,
             use_container_width=True,
-            hide_index=True
+            hide_index=True,
+            column_config=benchmark_column_config
         )
 
         st.markdown("---")
@@ -365,8 +432,61 @@ def render(data_loader):
         # Prepare fund metrics for display
         display_metrics = metrics_df.copy()
 
-        # Reorder columns to put Fund first
-        cols = ['Fund'] + [col for col in display_metrics.columns if col != 'Fund']
+        # Remove unwanted columns
+        columns_to_remove = [
+            'Expected Monthly Return',
+            'Expected Daily Return',
+            'Win Rate',
+            'Max Consecutive Wins',
+            'Skewness',
+            'VaR (95%)',
+            'CVaR (95%)',
+            'R²'
+        ]
+        display_metrics = display_metrics.drop(columns=[col for col in columns_to_remove if col in display_metrics.columns])
+
+        # Calculate annual returns for each fund with common year range
+        # Use the same all_years calculated for benchmark (includes current year)
+        annual_returns_data = {}
+        data_range_map = {}
+
+        for fund_name in final_fund_list:
+            if fund_name in funds_returns:
+                returns = funds_returns[fund_name]
+                annual_returns = returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+
+                # Create a series aligned to all years, with 0 for missing years
+                aligned_returns = []
+                years_with_data = []
+                for year in all_years:
+                    year_data = annual_returns[annual_returns.index.year == year]
+                    if len(year_data) > 0:
+                        aligned_returns.append(year_data.iloc[0])
+                        years_with_data.append(year)
+                    else:
+                        aligned_returns.append(0)
+
+                annual_returns_data[fund_name] = aligned_returns
+
+                # Create data range string for this fund
+                if len(years_with_data) > 0:
+                    first_year = years_with_data[0]
+                    last_year = years_with_data[-1]
+                    if first_year == last_year:
+                        data_range_map[fund_name] = str(first_year)
+                    else:
+                        data_range_map[fund_name] = f"{first_year}-{last_year}"
+                else:
+                    data_range_map[fund_name] = "N/A"
+
+        # Add annual returns trend column
+        display_metrics['Annual Return Trend'] = display_metrics['Fund'].map(annual_returns_data)
+
+        # Add data range column
+        display_metrics['Data Range'] = display_metrics['Fund'].map(data_range_map)
+
+        # Reorder columns to put Fund first, then Data Range, then Annual Return Trend
+        cols = ['Fund', 'Data Range', 'Annual Return Trend'] + [col for col in display_metrics.columns if col not in ['Fund', 'Data Range', 'Annual Return Trend']]
         display_metrics = display_metrics[cols]
 
         # Convert percentage columns from decimal to percentage (0.1 -> 10.0)
@@ -376,6 +496,22 @@ def render(data_loader):
 
         # Create column config for proper formatting
         column_config = {}
+
+        # Add Data Range column config
+        column_config['Data Range'] = st.column_config.TextColumn(
+            'Data Range',
+            help="Date range of available data (YYYY-YYYY format)",
+            width="small"
+        )
+
+        # Add line chart config for Annual Return Trend
+        column_config['Annual Return Trend'] = st.column_config.LineChartColumn(
+            'Annual Return Trend',
+            help="Annual returns (%) for each year in the selected period",
+            y_min=-50,
+            y_max=100
+        )
+
         for col in display_metrics.columns:
             if col in pct_cols:
                 column_config[col] = st.column_config.NumberColumn(
@@ -383,7 +519,7 @@ def render(data_loader):
                     format="%.2f%%",
                     help=f"{col} as percentage"
                 )
-            elif col not in ['Fund'] and display_metrics[col].dtype in ['float64', 'int64']:
+            elif col not in ['Fund', 'Annual Return Trend'] and display_metrics[col].dtype in ['float64', 'int64']:
                 column_config[col] = st.column_config.NumberColumn(
                     col,
                     format="%.2f"
