@@ -598,6 +598,111 @@ def create_annual_returns_bubble_chart(returns_dict, benchmark_returns, benchmar
 
     return fig
 
+def create_annual_returns_subplots(returns_dict, benchmark_returns, benchmark_name, start_date, end_date):
+    """Create bar chart subplots showing annual returns by fund for each year
+
+    Args:
+        returns_dict: Dictionary {fund_name: returns_series}
+        benchmark_returns: Series with benchmark returns
+        benchmark_name: String name of benchmark
+        start_date: Start date for analysis
+        end_date: End date for analysis
+
+    Returns:
+        Plotly figure with subplots
+    """
+    from plotly.subplots import make_subplots
+
+    # Get all years in the range
+    all_years = list(range(start_date.year, end_date.year + 1))
+
+    # Calculate annual returns for each fund
+    fund_annual_returns = {}
+    for fund_name, returns in returns_dict.items():
+        annual_returns = returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+        fund_annual_returns[fund_name] = {year: None for year in all_years}
+        for year_date in annual_returns.index:
+            year = year_date.year
+            if year in all_years:
+                fund_annual_returns[fund_name][year] = annual_returns[year_date]
+
+    # Calculate benchmark annual returns
+    benchmark_annual = benchmark_returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+    benchmark_by_year = {year: None for year in all_years}
+    for year_date in benchmark_annual.index:
+        year = year_date.year
+        if year in all_years:
+            benchmark_by_year[year] = benchmark_annual[year_date]
+
+    # Create subplots - one per year (vertically stacked)
+    num_years = len(all_years)
+    fig = make_subplots(
+        rows=num_years, cols=1,
+        subplot_titles=[str(year) for year in all_years],
+        shared_xaxes=True,
+        vertical_spacing=0.02  # Reduced spacing between subplots
+    )
+
+    # Get fund names
+    fund_names = list(returns_dict.keys())
+
+    # For each year, create a bar chart
+    for row_idx, year in enumerate(all_years, start=1):
+        # Get returns for this year for all funds
+        year_returns = []
+        for fund_name in fund_names:
+            ret = fund_annual_returns[fund_name].get(year)
+            year_returns.append(ret if ret is not None else 0)
+
+        # Add bars for each fund (all same color since we have x-axis labels)
+        for fund_idx, (fund_name, ret) in enumerate(zip(fund_names, year_returns)):
+            fig.add_trace(
+                go.Bar(
+                    x=[fund_name],
+                    y=[ret],
+                    name=fund_name,
+                    marker=dict(color='#3b82f6'),  # Single blue color for all bars
+                    showlegend=False,  # No legend needed with x-axis labels
+                    text=[f"{ret:.1f}%"],  # Data label on top of bar
+                    textposition='outside',
+                    hovertemplate=f'<b>{fund_name}</b><br>Return: %{{y:.2f}}%<extra></extra>'
+                ),
+                row=row_idx, col=1
+            )
+
+        # Add benchmark as horizontal line
+        benchmark_ret = benchmark_by_year.get(year)
+        if benchmark_ret is not None:
+            fig.add_hline(
+                y=benchmark_ret,
+                line_dash="dash",
+                line_color="red",
+                line_width=2,
+                annotation_text=f"Benchmark: {benchmark_ret:.1f}%",
+                annotation_position="top right",
+                row=row_idx, col=1
+            )
+
+    # Update layout
+    fig.update_layout(
+        title=dict(
+            text="Annual Returns by Year - Fund Comparison",
+            font=dict(size=18, weight='bold')
+        ),
+        height=max(400, num_years * 250),  # Dynamic height based on number of years
+        template='plotly_white',
+        showlegend=False  # No legend needed
+    )
+
+    # Update y-axis labels for all subplots
+    for row in range(1, num_years + 1):
+        fig.update_yaxes(title_text="Return (%)", row=row, col=1)
+
+    # Show x-axis labels (fund names) - rotate for better readability
+    fig.update_xaxes(tickangle=-45)
+
+    return fig
+
 def create_bubble_scatter_chart(metrics_df, x_metric, y_metric, size_metric, fund_name_col='Fund',
                                  benchmark_x=None, benchmark_y=None):
     """Create bubble scatter chart with customizable metrics
@@ -723,7 +828,7 @@ def create_bubble_scatter_chart(metrics_df, x_metric, y_metric, size_metric, fun
 
 def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_name,
                                      start_date, end_date, risk_free_rate=0.0249,
-                                     ranking_mode='annual', max_funds=20):
+                                     ranking_mode='annual'):
     """Create performance ranking grid showing fund rankings by year
 
     Args:
@@ -734,7 +839,6 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
         end_date: End date for analysis (can be date or Timestamp)
         risk_free_rate: Risk-free rate for Sharpe calculation
         ranking_mode: 'annual' (rank by year) or 'cumulative' (rank by cumulative performance)
-        max_funds: Maximum number of funds to display (top N)
 
     Returns:
         Plotly figure
@@ -788,10 +892,14 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
                 sharpe = calculate_sharpe_ratio(year_returns, risk_free_rate)
                 max_dd = calculate_max_drawdown(year_returns) * 100
 
+                # Calculate annual return (total return for the period, not annualized)
+                annual_return = total_return * 100
+
                 fund_year_data.append({
                     'Fund': fund_name,
                     'Year': year,
                     'CAGR': cagr,
+                    'Annual Return': annual_return,
                     'Sharpe': sharpe,
                     'Volatility': volatility,
                     'Max DD': max_dd
@@ -820,10 +928,14 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
                 sharpe = calculate_sharpe_ratio(year_returns, risk_free_rate)
                 max_dd = calculate_max_drawdown(year_returns) * 100
 
+                # Calculate annual return (total return for the period, not annualized)
+                annual_return = total_return * 100
+
                 fund_year_data.append({
                     'Fund': f"🔷 {benchmark_name}",
                     'Year': year,
                     'CAGR': cagr,
+                    'Annual Return': annual_return,
                     'Sharpe': sharpe,
                     'Volatility': volatility,
                     'Max DD': max_dd
@@ -845,19 +957,8 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
     # Rank funds by CAGR for each year (break ties by fund name for consistency)
     df['Rank'] = df.groupby('Year')['CAGR'].rank(ascending=False, method='first').astype(int)
 
-    # Limit to top N funds (based on average rank)
-    top_funds = df.groupby('Fund')['Rank'].mean().nsmallest(max_funds).index
-    df = df[df['Fund'].isin(top_funds)]
-
-    # Get unique ranks that appear in the filtered data
-    unique_ranks = sorted(df['Rank'].unique())
-
-    # Create a mapping for consecutive rank display
-    rank_mapping = {old_rank: new_rank for new_rank, old_rank in enumerate(unique_ranks, start=1)}
-    df['Display_Rank'] = df['Rank'].map(rank_mapping)
-
-    # Create pivot for heatmap (Display_Rank x Year -> CAGR for coloring)
-    pivot_cagr = df.pivot(index='Display_Rank', columns='Year', values='CAGR')
+    # Create pivot for heatmap (Rank x Year -> CAGR for coloring)
+    pivot_cagr = df.pivot(index='Rank', columns='Year', values='CAGR')
 
     # Sort by rank
     pivot_cagr = pivot_cagr.sort_index()
@@ -865,10 +966,10 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
     # Create annotations with fund name and metrics
     annotations = []
 
-    for display_rank in pivot_cagr.index:
+    for rank in pivot_cagr.index:
         for year in pivot_cagr.columns:
-            # Get fund data for this display rank and year
-            fund_data = df[(df['Display_Rank'] == display_rank) & (df['Year'] == year)]
+            # Get fund data for this rank and year
+            fund_data = df[(df['Rank'] == rank) & (df['Year'] == year)]
 
             if not fund_data.empty:
                 row = fund_data.iloc[0]
@@ -881,6 +982,7 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
 
                 # Create multi-line annotation
                 text = f"<b>{display_name}</b><br>" \
+                       f"Ann Ret: {row['Annual Return']:.1f}%<br>" \
                        f"CAGR: {row['CAGR']:.1f}%<br>" \
                        f"SR: {row['Sharpe']:.2f} | DD: {row['Max DD']:.1f}%<br>" \
                        f"Vol: {row['Volatility']:.1f}%"
@@ -888,7 +990,7 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
                 annotations.append(
                     dict(
                         x=year,
-                        y=display_rank,
+                        y=rank,
                         text=text,
                         showarrow=False,
                         font=dict(size=9, color='white' if abs(row['CAGR']) > 10 else 'black'),
@@ -903,9 +1005,9 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
         x=pivot_cagr.columns,
         y=pivot_cagr.index,
         colorscale=[
-            [0, '#ef4444'],      # Red for low CAGR
-            [0.5, '#fbbf24'],    # Yellow for medium
-            [1, '#10b981']       # Green for high CAGR
+            [0, '#a5f3fc'],      # Light cyan for low CAGR
+            [0.5, '#3b82f6'],    # Blue for medium
+            [1, '#1e40af']       # Dark blue for high CAGR
         ],
         zmid=0,  # Center colorscale at 0
         text=pivot_cagr.values,

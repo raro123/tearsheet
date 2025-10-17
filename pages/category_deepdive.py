@@ -9,6 +9,7 @@ from src.metrics import calculate_all_metrics
 from src.visualizations import (
     create_category_equity_curves,
     create_annual_returns_bubble_chart,
+    create_annual_returns_subplots,
     create_bubble_scatter_chart,
     create_rolling_metric_chart,
     create_performance_ranking_grid
@@ -211,15 +212,24 @@ def render(data_loader):
 
         st.markdown("---")
 
-        # Chart 2: Annual Returns Bubble Chart
+        # Chart 2: Annual Returns Subplots
         st.subheader("📊 Annual Returns by Year")
-        st.caption("Bubble size represents annual volatility")
+        st.caption("Each year shows fund performance with benchmark comparison")
 
-        fig2 = create_annual_returns_bubble_chart(
+        fig2 = create_annual_returns_subplots(
             funds_returns, benchmark_returns, benchmark_name,
             start_date, end_date
         )
         st.plotly_chart(fig2, use_container_width=True)
+
+        # # Chart 2: Annual Returns Bubble Chart (Commented for experimentation)
+        # # st.subheader("📊 Annual Returns by Year")
+        # # st.caption("Bubble size represents annual volatility")
+        # # fig2 = create_annual_returns_bubble_chart(
+        # #     funds_returns, benchmark_returns, benchmark_name,
+        # #     start_date, end_date
+        # # )
+        # # st.plotly_chart(fig2, use_container_width=True)
 
         st.markdown("---")
 
@@ -296,33 +306,19 @@ def render(data_loader):
         st.subheader("🏆 Performance Ranking Grid")
         st.caption("Visual ranking of funds by year with embedded metrics")
 
-        col1, col2 = st.columns([3, 1])
-
-        with col1:
-            ranking_mode = st.radio(
-                "Ranking Mode",
-                options=['annual', 'cumulative'],
-                format_func=lambda x: 'Annual (Rank by each year)' if x == 'annual' else 'Cumulative (Rank from start to year end)',
-                index=0,
-                horizontal=True,
-                key="ranking_mode"
-            )
-
-        with col2:
-            max_funds_display = st.slider(
-                "Max Funds",
-                min_value=5,
-                max_value=30,
-                value=20,
-                step=5,
-                key="max_funds_grid"
-            )
+        ranking_mode = st.radio(
+            "Ranking Mode",
+            options=['annual', 'cumulative'],
+            format_func=lambda x: 'Annual (Rank by each year)' if x == 'annual' else 'Cumulative (Rank from start to year end)',
+            index=0,
+            horizontal=True,
+            key="ranking_mode"
+        )
 
         fig5 = create_performance_ranking_grid(
             funds_returns, benchmark_returns, benchmark_name,
             start_date, end_date, risk_free_rate,
-            ranking_mode=ranking_mode,
-            max_funds=max_funds_display
+            ranking_mode=ranking_mode
         )
         st.plotly_chart(fig5, use_container_width=True)
 
