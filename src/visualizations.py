@@ -369,7 +369,7 @@ def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_na
     return fig
 
 def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_name):
-    """Create equity curves for multiple funds in a category
+    """Create equity curves for multiple funds in a category with monthly resolution
 
     Args:
         returns_dict: Dictionary {fund_name: returns_series}
@@ -387,9 +387,17 @@ def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_nam
         '#06b6d4', '#f97316', '#84cc16', '#6366f1', '#14b8a6'
     ]
 
+    def resample_to_monthly(returns):
+        """Resample daily returns to monthly returns"""
+        # Use 'ME' (Month End) frequency and calculate compound return for each month
+        return returns.resample('ME').apply(lambda x: (1 + x).prod() - 1)
+
     # Add each fund's equity curve
     for idx, (fund_name, returns) in enumerate(returns_dict.items()):
-        cum_returns = (1 + returns).cumprod()
+        # Resample to monthly
+        monthly_returns = resample_to_monthly(returns)
+        # Calculate cumulative returns on monthly data
+        cum_returns = (1 + monthly_returns).cumprod()
         color = colors[idx % len(colors)]
 
         fig.add_trace(go.Scatter(
@@ -402,7 +410,8 @@ def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_nam
         ))
 
     # Add benchmark (thicker, distinct line)
-    benchmark_cum = (1 + benchmark_returns).cumprod()
+    monthly_benchmark = resample_to_monthly(benchmark_returns)
+    benchmark_cum = (1 + monthly_benchmark).cumprod()
     fig.add_trace(go.Scatter(
         x=benchmark_cum.index,
         y=(benchmark_cum - 1) * 100,
@@ -424,7 +433,7 @@ def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_nam
     return fig
 
 def create_annual_returns_bubble_chart(returns_dict, benchmark_returns, benchmark_name, start_date, end_date):
-    """Create bubble chart showing annual returns over time with volatility as bubble size
+    """Create vertical bubble chart showing annual returns with jitter and box plot overlay
 
     Args:
         returns_dict: Dictionary {fund_name: returns_series}
@@ -472,6 +481,10 @@ def create_annual_returns_bubble_chart(returns_dict, benchmark_returns, benchmar
     # Create DataFrame
     df = pd.DataFrame(all_data)
 
+    # Add jitter to Year for better visibility of overlapping bubbles
+    np.random.seed(42)  # For reproducibility
+    df['Year_Jittered'] = df['Year'] + np.random.uniform(-0.15, 0.15, size=len(df))
+
     # Color palette
     colors = [
         '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899',
@@ -480,17 +493,39 @@ def create_annual_returns_bubble_chart(returns_dict, benchmark_returns, benchmar
 
     fig = go.Figure()
 
+    # First, add box plot for each year (showing distribution)
+    years = sorted(df['Year'].unique())
+    for year in years:
+        year_data = df[df['Year'] == year]
+        fig.add_trace(go.Box(
+            x=year_data['Annual Return'],
+            y=[year] * len(year_data),  # All at same Y position
+            name=f'Distribution {year}',
+            orientation='h',
+            marker=dict(color='lightgray', opacity=0.3),
+            line=dict(color='gray', width=1),
+            fillcolor='lightgray',
+            opacity=0.5,
+            boxmean=False,
+            showlegend=False,
+            hoverinfo='skip',  # Don't show hover for box plot
+            width=0.3  # Narrower box plot
+        ))
+
     # Get unique funds (excluding benchmark)
     funds = [f for f in df['Fund'].unique() if not f.startswith('🔷')]
 
-    # Plot each fund
+    # Plot each fund with jitter
     for idx, fund_name in enumerate(funds):
-        fund_data = df[df['Fund'] == fund_name]
+        fund_data = df[df['Fund'] == fund_name].copy()
         color = colors[idx % len(colors)]
 
+        # Add year as text for hover
+        fund_data['Year_Text'] = fund_data['Year'].astype(str)
+
         fig.add_trace(go.Scatter(
-            x=fund_data['Year'],
-            y=fund_data['Annual Return'],
+            x=fund_data['Annual Return'],
+            y=fund_data['Year_Jittered'],  # Use jittered year
             mode='markers',
             name=fund_name,
             marker=dict(
@@ -501,18 +536,19 @@ def create_annual_returns_bubble_chart(returns_dict, benchmark_returns, benchmar
                 line=dict(width=1, color='white'),
                 opacity=0.7
             ),
+            customdata=fund_data[['Year', 'Annual Volatility']],
             hovertemplate='<b>%{fullData.name}</b><br>' +
-                         'Year: %{x}<br>' +
-                         'Return: %{y:.2f}%<br>' +
-                         'Volatility: %{marker.size:.2f}%' +
+                         'Year: %{customdata[0]:.0f}<br>' +
+                         'Return: %{x:.2f}%<br>' +
+                         'Volatility: %{customdata[1]:.2f}%' +
                          '<extra></extra>'
         ))
 
-    # Plot benchmark with distinct style
-    benchmark_data = df[df['Type'] == 'Benchmark']
+    # Plot benchmark with distinct style (no jitter for benchmark)
+    benchmark_data = df[df['Type'] == 'Benchmark'].copy()
     fig.add_trace(go.Scatter(
-        x=benchmark_data['Year'],
-        y=benchmark_data['Annual Return'],
+        x=benchmark_data['Annual Return'],
+        y=benchmark_data['Year'],  # No jitter for benchmark
         mode='markers',
         name=f"🔷 {benchmark_name}",
         marker=dict(
@@ -524,37 +560,39 @@ def create_annual_returns_bubble_chart(returns_dict, benchmark_returns, benchmar
             opacity=0.9,
             symbol='diamond'
         ),
+        customdata=benchmark_data[['Year', 'Annual Volatility']],
         hovertemplate='<b>%{fullData.name}</b><br>' +
-                     'Year: %{x}<br>' +
-                     'Return: %{y:.2f}%<br>' +
-                     'Volatility: %{marker.size:.2f}%' +
+                     'Year: %{customdata[0]:.0f}<br>' +
+                     'Return: %{x:.2f}%<br>' +
+                     'Volatility: %{customdata[1]:.2f}%' +
                      '<extra></extra>'
     ))
 
     fig.update_layout(
         title=dict(
-            text="Annual Returns by Year (Bubble Size: Annual Volatility)",
+            text="Annual Returns Distribution by Year (Bubble Size: Annual Volatility)",
             font=dict(size=18, weight='bold')
         ),
-        xaxis_title="Year",
-        yaxis_title="Annual Return (%)",
-        height=600,
+        xaxis_title="Annual Return (%)",
+        yaxis_title="Year",
+        height=max(500, len(years) * 100),  # Dynamic height based on number of years
         template='plotly_white',
         showlegend=False,
         hovermode='closest',
         xaxis=dict(
-            dtick=1,  # Show every year
-            showgrid=True,
-            gridwidth=1,
-            gridcolor='lightgray'
-        ),
-        yaxis=dict(
             showgrid=True,
             gridwidth=1,
             gridcolor='lightgray',
             zeroline=True,
             zerolinewidth=2,
             zerolinecolor='gray'
+        ),
+        yaxis=dict(
+            dtick=1,  # Show every year
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='lightgray',
+            autorange='reversed'  # Most recent year at top
         )
     )
 
@@ -915,22 +953,25 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
 
 def create_rolling_metric_chart(returns_dict, benchmark_returns, benchmark_name,
                                   metric_type, window, risk_free_rate=0.0249, window_label=None):
-    """Create rolling metric chart for multiple funds
+    """Create rolling metric chart for multiple funds with monthly resolution
 
     Args:
         returns_dict: Dictionary {fund_name: returns_series}
         benchmark_returns: Series with benchmark returns
         benchmark_name: String name of benchmark
         metric_type: "Return", "Volatility", "Sharpe", or "Drawdown"
-        window: Rolling window size in days
+        window: Rolling window size in days (will be converted to months)
         risk_free_rate: Risk-free rate for Sharpe calculation
         window_label: Optional custom label for window (e.g., "1 Year", "3 Years")
 
     Returns:
         Plotly figure
     """
-    TRADING_DAYS = 252
+    MONTHS_PER_YEAR = 12
     fig = go.Figure()
+
+    # Convert window from days to months (approximate: 21 trading days per month)
+    window_months = int(window / 21)
 
     # Color palette
     colors = [
@@ -938,27 +979,32 @@ def create_rolling_metric_chart(returns_dict, benchmark_returns, benchmark_name,
         '#06b6d4', '#f97316', '#84cc16', '#6366f1', '#14b8a6'
     ]
 
-    def calculate_rolling_metric(returns, metric_type, window):
-        """Calculate rolling metric based on type"""
+    def resample_to_monthly(returns):
+        """Resample daily returns to monthly returns"""
+        # Use 'ME' (Month End) frequency and calculate compound return for each month
+        return returns.resample('ME').apply(lambda x: (1 + x).prod() - 1)
+
+    def calculate_rolling_metric(returns, metric_type, window_months):
+        """Calculate rolling metric based on type using monthly data"""
         if metric_type == "Return":
             # Annualized rolling return
-            return returns.rolling(window).apply(lambda x: (1 + x).prod() - 1) * (TRADING_DAYS / window) * 100
+            return returns.rolling(window_months).apply(lambda x: (1 + x).prod() - 1) * (MONTHS_PER_YEAR / window_months) * 100
         elif metric_type == "Volatility":
             # Annualized rolling volatility
-            return returns.rolling(window).std() * np.sqrt(TRADING_DAYS) * 100
+            return returns.rolling(window_months).std() * np.sqrt(MONTHS_PER_YEAR) * 100
         elif metric_type == "Sharpe":
             # Rolling Sharpe ratio
-            rolling_mean = returns.rolling(window).mean() * TRADING_DAYS
-            rolling_std = returns.rolling(window).std() * np.sqrt(TRADING_DAYS)
+            rolling_mean = returns.rolling(window_months).mean() * MONTHS_PER_YEAR
+            rolling_std = returns.rolling(window_months).std() * np.sqrt(MONTHS_PER_YEAR)
             return (rolling_mean - risk_free_rate) / rolling_std
         elif metric_type == "Drawdown":
             # Rolling max drawdown
             rolling_dd = []
             for i in range(len(returns)):
-                if i < window:
+                if i < window_months:
                     rolling_dd.append(np.nan)
                 else:
-                    window_returns = returns.iloc[i-window:i]
+                    window_returns = returns.iloc[i-window_months:i]
                     cum_returns = (1 + window_returns).cumprod()
                     running_max = cum_returns.expanding().max()
                     dd = ((cum_returns - running_max) / running_max * 100).min()
@@ -969,7 +1015,13 @@ def create_rolling_metric_chart(returns_dict, benchmark_returns, benchmark_name,
 
     # Plot each fund
     for idx, (fund_name, returns) in enumerate(returns_dict.items()):
-        metric_values = calculate_rolling_metric(returns, metric_type, window)
+        # Resample to monthly
+        monthly_returns = resample_to_monthly(returns)
+        metric_values = calculate_rolling_metric(monthly_returns, metric_type, window_months)
+
+        # Drop NaN values to avoid showing initial period with insufficient data
+        metric_values = metric_values.dropna()
+
         color = colors[idx % len(colors)]
 
         fig.add_trace(go.Scatter(
@@ -982,7 +1034,12 @@ def create_rolling_metric_chart(returns_dict, benchmark_returns, benchmark_name,
         ))
 
     # Add benchmark
-    benchmark_metric = calculate_rolling_metric(benchmark_returns, metric_type, window)
+    monthly_benchmark = resample_to_monthly(benchmark_returns)
+    benchmark_metric = calculate_rolling_metric(monthly_benchmark, metric_type, window_months)
+
+    # Drop NaN values for benchmark as well
+    benchmark_metric = benchmark_metric.dropna()
+
     fig.add_trace(go.Scatter(
         x=benchmark_metric.index,
         y=benchmark_metric,
