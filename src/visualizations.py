@@ -634,72 +634,100 @@ def create_annual_returns_subplots(returns_dict, benchmark_returns, benchmark_na
         if year in all_years:
             benchmark_by_year[year] = benchmark_annual[year_date]
 
-    # Create subplots - one per year (vertically stacked)
+    # Create subplots - one per year (horizontal columns, newest to oldest)
     num_years = len(all_years)
+    reversed_years = list(reversed(all_years))  # Newest year first
+
     fig = make_subplots(
-        rows=num_years, cols=1,
-        subplot_titles=[str(year) for year in all_years],
-        shared_xaxes=True,
-        vertical_spacing=0.02  # Reduced spacing between subplots
+        rows=1, cols=num_years,
+        subplot_titles=[str(year) for year in reversed_years],
+        shared_yaxes=True,
+        horizontal_spacing=0.03  # Spacing between columns
     )
 
     # Get fund names
     fund_names = list(returns_dict.keys())
 
+    # Create display names by stripping IDs (everything after "|")
+    display_names = {}
+    for fund_name in fund_names:
+        if '|' in fund_name:
+            display_name = fund_name.split('|')[0].strip()
+        else:
+            display_name = fund_name
+        display_names[fund_name] = display_name
+
+    # Sort fund names alphabetically by display name (reverse so A is at top)
+    fund_names_sorted = sorted(fund_names, key=lambda x: display_names[x], reverse=True)
+
     # For each year, create a bar chart
-    for row_idx, year in enumerate(all_years, start=1):
-        # Get returns for this year for all funds
+    for col_idx, year in enumerate(reversed_years, start=1):
+        # Get returns for this year for all funds (in sorted order)
         year_returns = []
-        for fund_name in fund_names:
+        for fund_name in fund_names_sorted:
             ret = fund_annual_returns[fund_name].get(year)
             year_returns.append(ret if ret is not None else 0)
 
-        # Add bars for each fund (all same color since we have x-axis labels)
-        for fund_idx, (fund_name, ret) in enumerate(zip(fund_names, year_returns)):
-            fig.add_trace(
-                go.Bar(
-                    x=[fund_name],
-                    y=[ret],
-                    name=fund_name,
-                    marker=dict(color='#3b82f6'),  # Single blue color for all bars
-                    showlegend=False,  # No legend needed with x-axis labels
-                    text=[f"{ret:.1f}%"],  # Data label on top of bar
-                    textposition='outside',
-                    hovertemplate=f'<b>{fund_name}</b><br>Return: %{{y:.2f}}%<extra></extra>'
-                ),
-                row=row_idx, col=1
-            )
+        # Add all funds as a single trace for this year
+        display_names_list = [display_names[fn] for fn in fund_names_sorted]
+        text_labels = [f"{ret:.1f}%" for ret in year_returns]
 
-        # Add benchmark as horizontal line
+        fig.add_trace(
+            go.Bar(
+                y=display_names_list,  # All fund names on Y-axis
+                x=year_returns,        # All returns on X-axis
+                orientation='h',       # Horizontal orientation
+                marker=dict(color='#3b82f6'),  # Single blue color for all bars
+                showlegend=False,      # No legend needed
+                text=text_labels,      # Data labels at end of bars
+                textposition='outside',
+                hovertemplate='%{y}<br>Return: %{x:.2f}%<extra></extra>',
+                width=0.8              # Bar width (0-1, where 1 = full category width)
+            ),
+            row=1, col=col_idx
+        )
+
+        # Add benchmark as vertical line
         benchmark_ret = benchmark_by_year.get(year)
         if benchmark_ret is not None:
-            fig.add_hline(
-                y=benchmark_ret,
+            fig.add_vline(
+                x=benchmark_ret,
                 line_dash="dash",
                 line_color="red",
                 line_width=2,
-                annotation_text=f"Benchmark: {benchmark_ret:.1f}%",
-                annotation_position="top right",
-                row=row_idx, col=1
+                annotation=dict(
+                    text=f"<b>{benchmark_ret:.1f}%</b>",
+                    xanchor="left",
+                    x=benchmark_ret,
+                    yanchor="top",
+                    y=1,
+                    xshift=5,  # Offset 5px to the right of the line
+                    font=dict(size=12),
+                    bgcolor="rgba(255, 255, 255, 0.9)",  # White background with slight transparency
+                    bordercolor="red",
+                    borderwidth=1,
+                    borderpad=4
+                ),
+                row=1, col=col_idx
             )
 
     # Update layout
     fig.update_layout(
         title=dict(
-            text="Annual Returns by Year - Fund Comparison",
+            text="Annual Returns by Year - Fund Comparison (Newest to Oldest)",
             font=dict(size=18, weight='bold')
         ),
-        height=max(400, num_years * 250),  # Dynamic height based on number of years
+        height=max(400, len(fund_names_sorted) * 40),  # Dynamic height based on number of funds
+        width=num_years * 400,  # Wide enough for horizontal scrolling
         template='plotly_white',
-        showlegend=False  # No legend needed
+        showlegend=False,  # No legend needed
+        margin=dict(l=200, r=50, t=100, b=50),  # More left margin for fund names
+        bargap=0.15  # Gap between bars (15%)
     )
 
-    # Update y-axis labels for all subplots
-    for row in range(1, num_years + 1):
-        fig.update_yaxes(title_text="Return (%)", row=row, col=1)
-
-    # Show x-axis labels (fund names) - rotate for better readability
-    fig.update_xaxes(tickangle=-45)
+    # Update x-axis label for all columns (Return %)
+    for col in range(1, num_years + 1):
+        fig.update_xaxes(title_text="Return (%)", row=1, col=col)
 
     return fig
 
@@ -852,12 +880,8 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
     start_date = pd.Timestamp(start_date)
     end_date = pd.Timestamp(end_date)
 
-    # Get all unique years in the date range
-    years = pd.date_range(start=start_date, end=end_date, freq='YE').year.unique()
-
-    if len(years) == 0:
-        # Handle single year case
-        years = [pd.Timestamp(end_date).year]
+    # Get all unique years in the date range (including incomplete years like current year)
+    years = list(range(start_date.year, end_date.year + 1))
 
     # Calculate metrics for each fund for each year
     fund_year_data = []
@@ -980,6 +1004,9 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
                 if len(display_name) > 20:
                     display_name = display_name[:17] + '...'
 
+                # Check if this is a benchmark
+                is_benchmark = fund_name.startswith('🔷')
+
                 # Create multi-line annotation
                 text = f"<b>{display_name}</b><br>" \
                        f"Ann Ret: {row['Annual Return']:.1f}%<br>" \
@@ -987,27 +1014,45 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
                        f"SR: {row['Sharpe']:.2f} | DD: {row['Max DD']:.1f}%<br>" \
                        f"Vol: {row['Volatility']:.1f}%"
 
-                annotations.append(
-                    dict(
-                        x=year,
-                        y=rank,
-                        text=text,
-                        showarrow=False,
-                        font=dict(size=9, color='white' if abs(row['CAGR']) > 10 else 'black'),
-                        xref='x',
-                        yref='y'
+                # Emphasize benchmark with different styling
+                if is_benchmark:
+                    annotations.append(
+                        dict(
+                            x=year,
+                            y=rank,
+                            text=text,
+                            showarrow=False,
+                            font=dict(size=9, color='#1e40af', family='Arial Black'),  # Bold blue font
+                            bgcolor='#fef3c7',  # Light yellow background
+                            bordercolor='#f59e0b',  # Orange border
+                            borderwidth=2,
+                            borderpad=4,
+                            xref='x',
+                            yref='y'
+                        )
                     )
-                )
+                else:
+                    annotations.append(
+                        dict(
+                            x=year,
+                            y=rank,
+                            text=text,
+                            showarrow=False,
+                            font=dict(size=9, color='black'),
+                            xref='x',
+                            yref='y'
+                        )
+                    )
 
-    # Create heatmap
+    # Create heatmap with transparent color scale and borders
     fig = go.Figure(data=go.Heatmap(
         z=pivot_cagr.values,
         x=pivot_cagr.columns,
         y=pivot_cagr.index,
         colorscale=[
-            [0, '#a5f3fc'],      # Light cyan for low CAGR
-            [0.5, '#3b82f6'],    # Blue for medium
-            [1, '#1e40af']       # Dark blue for high CAGR
+            [0, 'rgba(30, 64, 175, 0.3)'],      # Dark blue for low CAGR (30% opacity)
+            [0.5, 'rgba(59, 130, 246, 0.3)'],   # Blue for medium (30% opacity)
+            [1, 'rgba(165, 243, 252, 0.5)']     # Light cyan for high CAGR (50% opacity)
         ],
         zmid=0,  # Center colorscale at 0
         text=pivot_cagr.values,
@@ -1017,7 +1062,9 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
             tickmode="linear",
             tick0=pivot_cagr.min().min(),
             dtick=(pivot_cagr.max().max() - pivot_cagr.min().min()) / 5
-        )
+        ),
+        xgap=2,  # Horizontal gap between cells (border)
+        ygap=2   # Vertical gap between cells (border)
     ))
 
     # Add annotations

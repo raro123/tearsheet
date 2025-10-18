@@ -4,66 +4,52 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 
-def render_date_range_selector(all_funds_df):
+def render_date_range_selector(all_funds_df, data_loader):
     """Render date range selector with smart defaults
 
     Args:
         all_funds_df: DataFrame with fund metadata including scheme_code
+        data_loader: R2DataLoader instance to get actual data date range
 
     Returns:
         tuple: (start_date, end_date, period_desc)
     """
     st.subheader("📅 Date Range")
 
-    # Get min and max dates from available data
-    # Note: This is a simplified version. In practice, you'd query the actual data
-    max_date = datetime.now().date()
-    min_date = max_date - timedelta(days=365 * 10)  # Assume 10 years of history
+    # Get actual min and max dates from the dataset
+    min_date, max_date = data_loader.get_data_date_range()
 
-    date_option = st.radio(
-        "Select Period",
-        options=["1 Year", "3 Years", "5 Years", "10 Years", "Max", "Custom"],
-        index=2,
-        horizontal=True,
-        help="Choose analysis time period"
-    )
+    # Fallback to defaults if data range query fails
+    if min_date is None or max_date is None:
+        max_date = datetime.now().date()
+        min_date = max_date - timedelta(days=365 * 10)
 
-    if date_option == "Custom":
-        col1, col2 = st.columns(2)
-        with col1:
-            start_date = st.date_input(
-                "Start Date",
-                value=max_date - timedelta(days=365 * 5),
-                min_value=min_date,
-                max_value=max_date
-            )
-        with col2:
-            end_date = st.date_input(
-                "End Date",
-                value=max_date,
-                min_value=min_date,
-                max_value=max_date
-            )
-        period_desc = "Custom"
-    else:
-        end_date = max_date
-        if date_option == "1 Year":
-            start_date = max_date - timedelta(days=365)
-            period_desc = "1Y"
-        elif date_option == "3 Years":
-            start_date = max_date - timedelta(days=365 * 3)
-            period_desc = "3Y"
-        elif date_option == "5 Years":
-            start_date = max_date - timedelta(days=365 * 5)
-            period_desc = "5Y"
-        elif date_option == "10 Years":
-            start_date = max_date - timedelta(days=365 * 10)
-            period_desc = "10Y"
-        else:  # Max
-            start_date = min_date
-            period_desc = "Max"
+    # Calculate default start date: January 1st of (max_year - 10)
+    default_start_year = max_date.year - 10
+    default_start_date = datetime(default_start_year, 1, 1).date()
 
-    return start_date, end_date, period_desc
+    # Ensure default_start_date is not before min_date
+    if default_start_date < min_date:
+        default_start_date = min_date
+
+    # Show date pickers
+    col1, col2 = st.columns(2)
+    with col1:
+        start_date = st.date_input(
+            "Start Date",
+            value=default_start_date,
+            min_value=min_date,
+            max_value=max_date
+        )
+    with col2:
+        end_date = st.date_input(
+            "End Date",
+            value=max_date,
+            min_value=min_date,
+            max_value=max_date
+        )
+
+    return start_date, end_date, "Custom"
 
 
 def render_category_filters(all_funds_df, allow_all_level2=True):
@@ -118,7 +104,7 @@ def render_plan_type_filter():
     plan_type = st.radio(
         "Plan Type",
         options=["All", "Direct", "Regular"],
-        index=0,
+        index=1,  # Default to "Direct"
         horizontal=True,
         help="Filter funds by plan type"
     )
@@ -141,7 +127,7 @@ def render_fund_multiselect(filtered_funds_df, key_suffix=""):
     selection_mode = st.radio(
         "Selection Mode",
         options=["Include", "Exclude"],
-        index=0,
+        index=1,  # Default to "Exclude"
         horizontal=True,
         help="Include: Show only selected funds | Exclude: Show all except selected",
         key=f"selection_mode_{key_suffix}"
@@ -151,7 +137,7 @@ def render_fund_multiselect(filtered_funds_df, key_suffix=""):
     fund_options = filtered_funds_df['display_name'].tolist()
 
     if selection_mode == "Include":
-        default_selection = fund_options[:5] if len(fund_options) > 5 else fund_options
+        default_selection = []  # No pre-selection
         help_text = "Select funds to include in analysis"
     else:
         default_selection = []
