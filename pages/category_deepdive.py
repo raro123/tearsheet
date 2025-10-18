@@ -117,7 +117,7 @@ def render(data_loader):
         st.markdown("---")
 
         # Date range selector
-        start_date, end_date, period_desc = render_date_range_selector(all_funds)
+        start_date, end_date, period_desc = render_date_range_selector(all_funds, data_loader)
 
         st.markdown("---")
 
@@ -214,13 +214,13 @@ def render(data_loader):
 
         # Chart 2: Annual Returns Subplots
         st.subheader("📊 Annual Returns by Year")
-        st.caption("Each year shows fund performance with benchmark comparison")
+        st.caption("Horizontal layout showing fund performance from newest to oldest year (scroll right for older years)")
 
         fig2 = create_annual_returns_subplots(
             funds_returns, benchmark_returns, benchmark_name,
             start_date, end_date
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, use_container_width=False)
 
         # # Chart 2: Annual Returns Bubble Chart (Commented for experimentation)
         # # st.subheader("📊 Annual Returns by Year")
