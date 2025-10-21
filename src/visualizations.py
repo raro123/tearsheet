@@ -368,13 +368,14 @@ def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_na
 
     return fig
 
-def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_name):
-    """Create equity curves for multiple funds in a category with monthly resolution
+def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_name, log_scale=False):
+    """Create equity curves for multiple funds in a category with monthly resolution showing growth of ₹100
 
     Args:
         returns_dict: Dictionary {fund_name: returns_series}
         benchmark_returns: Series with benchmark returns
         benchmark_name: String name of benchmark
+        log_scale: Boolean, if True uses logarithmic y-axis
 
     Returns:
         Plotly figure
@@ -392,6 +393,18 @@ def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_nam
         # Use 'ME' (Month End) frequency and calculate compound return for each month
         return returns.resample('ME').apply(lambda x: (1 + x).prod() - 1)
 
+    def calculate_cagr(cum_returns, start_date, end_dates):
+        """Calculate CAGR for each point in the series"""
+        cagrs = []
+        for i, end_date in enumerate(end_dates):
+            years = (end_date - start_date).days / 365.25
+            if years > 0:
+                cagr = ((cum_returns.iloc[i]) ** (1 / years) - 1) * 100
+                cagrs.append(cagr)
+            else:
+                cagrs.append(0)
+        return cagrs
+
     # Add each fund's equity curve
     for idx, (fund_name, returns) in enumerate(returns_dict.items()):
         # Resample to monthly
@@ -400,30 +413,51 @@ def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_nam
         cum_returns = (1 + monthly_returns).cumprod()
         color = colors[idx % len(colors)]
 
+        # Calculate growth of 100
+        growth_values = cum_returns * 100
+
+        # Calculate CAGR for each point
+        start_date = cum_returns.index[0]
+        cagrs = calculate_cagr(cum_returns, start_date, cum_returns.index)
+
+        # Create custom hover text with both growth and CAGR
+        customdata = list(zip(cagrs))
+
         fig.add_trace(go.Scatter(
             x=cum_returns.index,
-            y=(cum_returns - 1) * 100,
+            y=growth_values,
             name=fund_name,
             line=dict(color=color, width=1.5),
-            hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Return: %{y:.2f}%<extra></extra>',
+            customdata=customdata,
+            hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Value: ₹%{y:.2f}<br>CAGR: %{customdata[0]:.2f}%<extra></extra>',
             opacity=0.7
         ))
 
     # Add benchmark (thicker, distinct line)
     monthly_benchmark = resample_to_monthly(benchmark_returns)
     benchmark_cum = (1 + monthly_benchmark).cumprod()
+    benchmark_growth = benchmark_cum * 100
+
+    # Calculate benchmark CAGR
+    start_date = benchmark_cum.index[0]
+    benchmark_cagrs = calculate_cagr(benchmark_cum, start_date, benchmark_cum.index)
+    customdata_bench = list(zip(benchmark_cagrs))
+
     fig.add_trace(go.Scatter(
         x=benchmark_cum.index,
-        y=(benchmark_cum - 1) * 100,
+        y=benchmark_growth,
         name=f"🔷 {benchmark_name}",
         line=dict(color='#000000', width=3, dash='dash'),
-        hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Return: %{y:.2f}%<extra></extra>'
+        customdata=customdata_bench,
+        hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Value: ₹%{y:.2f}<br>CAGR: %{customdata[0]:.2f}%<extra></extra>'
     ))
 
     fig.update_layout(
-        title=dict(text="Category Equity Curves - Cumulative Returns", font=dict(size=18, weight='bold')),
+        title=dict(text="Category Equity Curves - Growth of ₹100", font=dict(size=18, weight='bold')),
         xaxis_title="Date",
-        yaxis_title="Cumulative Return (%)",
+        yaxis_title="Growth of ₹100",
+        yaxis_side='right',
+        yaxis_type="log" if log_scale else "linear",
         hovermode='closest',
         height=600,
         template='plotly_white',
@@ -731,6 +765,810 @@ def create_annual_returns_subplots(returns_dict, benchmark_returns, benchmark_na
 
     return fig
 
+def create_annual_returns_table(returns_dict, benchmark_returns, benchmark_name, start_date, end_date):
+    """Create sortable table showing annual returns by fund for each year
+
+    Args:
+        returns_dict: Dictionary {fund_name: returns_series}
+        benchmark_returns: Series with benchmark returns
+        benchmark_name: String name of benchmark
+        start_date: Start date for analysis
+        end_date: End date for analysis
+
+    Returns:
+        Styled pandas DataFrame
+    """
+    import pandas as pd
+
+    # Get all years in the range
+    all_years = list(range(start_date.year, end_date.year + 1))
+    reversed_years = list(reversed(all_years))  # Newest year first
+
+    # Calculate number of years for CAGR
+    num_years = (end_date - start_date).days / 365.25
+
+    # Calculate annual returns for each fund
+    fund_annual_returns = {}
+    fund_cagr = {}
+
+    for fund_name, returns in returns_dict.items():
+        annual_returns = returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+        fund_annual_returns[fund_name] = {year: None for year in all_years}
+        for year_date in annual_returns.index:
+            year = year_date.year
+            if year in all_years:
+                fund_annual_returns[fund_name][year] = annual_returns[year_date]
+
+        # Calculate CAGR over entire period
+        cumulative_ret = (1 + returns).prod()
+        cagr = (cumulative_ret ** (1 / num_years) - 1) * 100
+        fund_cagr[fund_name] = cagr
+
+    # Calculate benchmark annual returns and CAGR
+    benchmark_annual = benchmark_returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+    benchmark_by_year = {year: None for year in all_years}
+    for year_date in benchmark_annual.index:
+        year = year_date.year
+        if year in all_years:
+            benchmark_by_year[year] = benchmark_annual[year_date]
+
+    benchmark_cumulative = (1 + benchmark_returns).prod()
+    benchmark_cagr = (benchmark_cumulative ** (1 / num_years) - 1) * 100
+
+    # Get fund names and create display names
+    fund_names = list(returns_dict.keys())
+    display_names = {}
+    for fund_name in fund_names:
+        if '|' in fund_name:
+            display_name = fund_name.split('|')[0].strip()
+        else:
+            display_name = fund_name
+        display_names[fund_name] = display_name
+
+    # Sort fund names alphabetically by display name
+    fund_names_sorted = sorted(fund_names, key=lambda x: display_names[x])
+
+    # Build DataFrame
+    data_rows = []
+
+    # Add fund rows
+    for fund_name in fund_names_sorted:
+        # Calculate Beat Benchmark count
+        beat_count = 0
+        total_count = 0
+        for year in all_years:
+            fund_ret = fund_annual_returns[fund_name].get(year)
+            bench_ret = benchmark_by_year.get(year)
+            # Only count years where both have valid data
+            if fund_ret is not None and bench_ret is not None:
+                total_count += 1
+                if fund_ret > bench_ret:
+                    beat_count += 1
+
+        beat_benchmark_str = f"{beat_count}/{total_count}" if total_count > 0 else "-"
+
+        row = {'Fund Name': display_names[fund_name]}
+        row['Beat Benchmark'] = beat_benchmark_str
+        row['CAGR'] = fund_cagr[fund_name]
+
+        for year in reversed_years:
+            ret = fund_annual_returns[fund_name].get(year)
+            row[str(year)] = ret if ret is not None else None
+
+        data_rows.append(row)
+
+    # Add benchmark row
+    benchmark_row = {'Fund Name': f"🔷 {benchmark_name}"}
+    benchmark_row['Beat Benchmark'] = '-'
+    benchmark_row['CAGR'] = benchmark_cagr
+    for year in reversed_years:
+        bench_ret = benchmark_by_year.get(year)
+        benchmark_row[str(year)] = bench_ret if bench_ret is not None else None
+    data_rows.append(benchmark_row)
+
+    df = pd.DataFrame(data_rows)
+
+    # Define formatting and styling functions
+    def format_value(val):
+        """Format cell values as percentages"""
+        if pd.isna(val):
+            return '-'
+        return f'{val:.2f}%'
+
+    def highlight_vs_benchmark(s, benchmark_row):
+        """Highlight cells based on comparison with benchmark"""
+        # Get benchmark value for this column
+        benchmark_val = benchmark_row[s.name]
+
+        # Apply styling to each cell
+        styles = []
+        for idx, val in enumerate(s):
+            # Check if this is the benchmark row
+            if idx == len(s) - 1:  # Last row is benchmark
+                styles.append('background-color: #dbeafe; font-weight: bold')
+            elif pd.isna(val) or pd.isna(benchmark_val):
+                styles.append('')
+            elif val > benchmark_val:
+                styles.append('background-color: #dcfce7')  # Light green
+            elif val < benchmark_val:
+                styles.append('background-color: #fee2e2')  # Light red
+            else:
+                styles.append('background-color: #fef9c3')  # Light yellow
+
+        return styles
+
+    # Get benchmark row for comparison
+    benchmark_row_data = df.iloc[-1]
+
+    # Create styled dataframe
+    styled_df = df.style.format({
+        'CAGR': format_value,
+        **{str(year): format_value for year in reversed_years}
+    })
+
+    # Apply conditional formatting for each numeric column (CAGR and year columns)
+    numeric_cols = ['CAGR'] + [str(year) for year in reversed_years]
+    for col in numeric_cols:
+        styled_df = styled_df.apply(
+            highlight_vs_benchmark,
+            subset=[col],
+            benchmark_row=benchmark_row_data,
+            axis=0
+        )
+
+    # Highlight fund name column for benchmark row
+    def highlight_benchmark_name(s):
+        return ['background-color: #dbeafe; font-weight: bold' if val.startswith('🔷') else ''
+                for val in s]
+
+    styled_df = styled_df.apply(highlight_benchmark_name, subset=['Fund Name'], axis=0)
+
+    return styled_df
+
+def create_correlation_heatmap(returns_dict, benchmark_returns, benchmark_name):
+    """Create correlation heatmap showing correlations between all funds and benchmark
+
+    Args:
+        returns_dict: Dictionary {fund_name: returns_series}
+        benchmark_returns: Series with benchmark returns
+        benchmark_name: String name of benchmark
+
+    Returns:
+        Plotly figure
+    """
+    import pandas as pd
+    import plotly.graph_objects as go
+
+    def resample_to_monthly(returns):
+        """Resample daily returns to monthly returns"""
+        return returns.resample('ME').apply(lambda x: (1 + x).prod() - 1)
+
+    # Create DataFrame with all returns (monthly)
+    returns_data = {}
+
+    # Add all funds
+    for fund_name, returns in returns_dict.items():
+        monthly_returns = resample_to_monthly(returns)
+        # Create display name (remove code after |)
+        if '|' in fund_name:
+            display_name = fund_name.split('|')[0].strip()
+        else:
+            display_name = fund_name
+        returns_data[display_name] = monthly_returns
+
+    # Add benchmark
+    benchmark_monthly = resample_to_monthly(benchmark_returns)
+    returns_data[f"🔷 {benchmark_name}"] = benchmark_monthly
+
+    # Create DataFrame and align dates
+    returns_df = pd.DataFrame(returns_data)
+
+    # Calculate correlation matrix
+    corr_matrix = returns_df.corr()
+
+    # Create custom 4-color scale for maximum distinction between correlation levels
+    custom_colorscale = [
+        [0.0, '#d73027'],   # Red (low correlation)
+        [0.33, '#fc8d59'],  # Orange
+        [0.67, '#fee08b'],  # Yellow
+        [1.0, '#1a9850']    # Green (high correlation)
+    ]
+
+    # Create heatmap with custom colorscale for better distinction of high correlations
+    fig = go.Figure(data=go.Heatmap(
+        z=corr_matrix.values,
+        x=corr_matrix.columns,
+        y=corr_matrix.index,
+        colorscale=custom_colorscale,
+        text=corr_matrix.values,
+        texttemplate='%{text:.2f}',
+        textfont={"size": 10},
+        colorbar=dict(
+            title=dict(text="Correlation", side="right"),
+            tickmode="auto",
+            nticks=6
+        ),
+        hovertemplate='<b>%{x}</b> vs <b>%{y}</b><br>Correlation: %{z:.3f}<extra></extra>'
+    ))
+
+    # Calculate appropriate height based on number of funds
+    num_funds = len(corr_matrix)
+    height = max(500, min(900, num_funds * 40))
+
+    fig.update_layout(
+        title=dict(
+            text="Monthly Returns Correlation Matrix",
+            font=dict(size=16, weight='bold')
+        ),
+        xaxis=dict(
+            title='',
+            tickangle=-45,
+            side='bottom'
+        ),
+        yaxis=dict(
+            title='',
+            autorange='reversed'  # Top to bottom matches left to right
+        ),
+        height=height,
+        width=height,  # Square aspect ratio
+        margin=dict(l=200, r=100, t=100, b=200),
+        template='plotly_white'
+    )
+
+    return fig
+
+def create_cagr_distribution(metrics_df, benchmark_cagr):
+    """Create density curve showing CAGR distribution
+
+    Args:
+        metrics_df: DataFrame with fund metrics (must have 'CAGR' column)
+        benchmark_cagr: Benchmark CAGR value (as decimal, e.g., 0.15 for 15%)
+
+    Returns:
+        Plotly figure
+    """
+    import plotly.graph_objects as go
+    from scipy import stats
+
+    # Convert CAGR from decimal to percentage
+    cagr_values = metrics_df['CAGR'].values * 100
+    benchmark_cagr_pct = benchmark_cagr * 100
+    median_cagr = np.median(cagr_values)
+
+    # Create KDE (density curve)
+    cagr_array = np.array(cagr_values)
+    kde = stats.gaussian_kde(cagr_array)
+    x_range = np.linspace(cagr_array.min() - 2, cagr_array.max() + 2, 200)
+    density = kde(x_range)
+
+    fig = go.Figure()
+
+    # Add density curve
+    fig.add_trace(go.Scatter(
+        x=x_range,
+        y=density,
+        mode='lines',
+        fill='tozeroy',
+        line=dict(color='#3b82f6', width=2),
+        fillcolor='rgba(59, 130, 246, 0.2)',
+        name='Distribution',
+        hovertemplate='CAGR: %{x:.1f}%<extra></extra>'
+    ))
+
+    # Add median line
+    fig.add_vline(
+        x=median_cagr,
+        line_dash="dash",
+        line_color="#10b981",
+        line_width=2,
+        annotation=dict(
+            text=f"Median: {median_cagr:.1f}%",
+            textangle=0,
+            font=dict(size=9, color='#10b981'),
+            yanchor='top'
+        )
+    )
+
+    # Add benchmark line
+    fig.add_vline(
+        x=benchmark_cagr_pct,
+        line_dash="dot",
+        line_color="#ef4444",
+        line_width=2,
+        annotation=dict(
+            text=f"Benchmark: {benchmark_cagr_pct:.1f}%",
+            textangle=0,
+            font=dict(size=9, color='#ef4444'),
+            yanchor='bottom'
+        )
+    )
+
+    fig.update_layout(
+        title=dict(text="CAGR Distribution", font=dict(size=13, weight='bold', color='#334155')),
+        height=140,
+        margin=dict(l=15, r=15, t=35, b=35),
+        template='plotly_white',
+        showlegend=False,
+        xaxis=dict(
+            showticklabels=True,
+            title='',
+            showgrid=False
+        ),
+        yaxis=dict(
+            showticklabels=False,
+            title='',
+            showgrid=False
+        ),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)'
+    )
+
+    return fig
+
+def create_annual_returns_distribution(returns_dict, benchmark_returns, start_date, end_date):
+    """Create density curve of annual returns distribution
+
+    Args:
+        returns_dict: Dictionary {fund_name: returns_series}
+        benchmark_returns: Series with benchmark returns
+        start_date: Start date for analysis
+        end_date: End date for analysis
+
+    Returns:
+        Plotly figure
+    """
+    import plotly.graph_objects as go
+    from scipy import stats
+
+    # Get all years in the range
+    all_years = list(range(start_date.year, end_date.year + 1))
+
+    # Collect all annual returns from all funds
+    all_annual_returns = []
+
+    for fund_name, returns in returns_dict.items():
+        annual_returns = returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+        for year_date in annual_returns.index:
+            year = year_date.year
+            if year in all_years:
+                ret = annual_returns[year_date]
+                if not pd.isna(ret):
+                    all_annual_returns.append(ret)
+
+    # Add benchmark annual returns
+    benchmark_annual = benchmark_returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+    benchmark_annual_values = []
+    for year_date in benchmark_annual.index:
+        year = year_date.year
+        if year in all_years:
+            ret = benchmark_annual[year_date]
+            if not pd.isna(ret):
+                all_annual_returns.append(ret)
+                benchmark_annual_values.append(ret)
+
+    # Calculate statistics
+    median_return = np.median(all_annual_returns)
+    benchmark_median = np.median(benchmark_annual_values) if benchmark_annual_values else median_return
+
+    # Create KDE (density curve)
+    all_annual_returns_array = np.array(all_annual_returns)
+    kde = stats.gaussian_kde(all_annual_returns_array)
+    x_range = np.linspace(all_annual_returns_array.min() - 5, all_annual_returns_array.max() + 5, 200)
+    density = kde(x_range)
+
+    fig = go.Figure()
+
+    # Add density curve
+    fig.add_trace(go.Scatter(
+        x=x_range,
+        y=density,
+        mode='lines',
+        fill='tozeroy',
+        line=dict(color='#3b82f6', width=2),
+        fillcolor='rgba(59, 130, 246, 0.2)',
+        name='Distribution',
+        hovertemplate='Return: %{x:.1f}%<extra></extra>'
+    ))
+
+    # Add median line
+    fig.add_vline(
+        x=median_return,
+        line_dash="dash",
+        line_color="#10b981",
+        line_width=2,
+        annotation=dict(
+            text=f"Median: {median_return:.1f}%",
+            textangle=0,
+            font=dict(size=10, color='#10b981'),
+            yanchor='top'
+        )
+    )
+
+    # Add benchmark line
+    fig.add_vline(
+        x=benchmark_median,
+        line_dash="dot",
+        line_color="#ef4444",
+        line_width=2,
+        annotation=dict(
+            text=f"Benchmark: {benchmark_median:.1f}%",
+            textangle=0,
+            font=dict(size=10, color='#ef4444'),
+            yanchor='bottom'
+        )
+    )
+
+    fig.update_layout(
+        title=dict(text="Annual Returns Distribution", font=dict(size=13, weight='bold', color='#334155')),
+        height=140,
+        margin=dict(l=15, r=15, t=35, b=35),
+        template='plotly_white',
+        showlegend=False,
+        xaxis=dict(
+            showticklabels=True,
+            title='',
+            showgrid=False
+        ),
+        yaxis=dict(
+            showticklabels=False,
+            title='',
+            showgrid=False
+        ),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)'
+    )
+
+    return fig
+
+def create_volatility_distribution(returns_dict, benchmark_returns, start_date, end_date, risk_free_rate=0.0249):
+    """Create density curve of annual volatility distribution
+
+    Args:
+        returns_dict: Dictionary {fund_name: returns_series}
+        benchmark_returns: Series with benchmark returns
+        start_date: Start date for analysis
+        end_date: End date for analysis
+        risk_free_rate: Risk-free rate for calculations
+
+    Returns:
+        Plotly figure
+    """
+    import plotly.graph_objects as go
+    from scipy import stats
+
+    TRADING_DAYS = 252
+
+    # Get all years in the range
+    all_years = list(range(start_date.year, end_date.year + 1))
+
+    # Collect all annual volatilities from all funds
+    all_volatilities = []
+
+    for fund_name, returns in returns_dict.items():
+        for year in all_years:
+            # Get returns for this year
+            year_returns = returns[returns.index.year == year]
+            if len(year_returns) > 20:  # At least 20 trading days
+                annual_vol = year_returns.std() * np.sqrt(TRADING_DAYS) * 100
+                if not pd.isna(annual_vol):
+                    all_volatilities.append(annual_vol)
+
+    # Calculate benchmark annual volatilities
+    benchmark_volatilities = []
+    for year in all_years:
+        year_returns = benchmark_returns[benchmark_returns.index.year == year]
+        if len(year_returns) > 20:
+            annual_vol = year_returns.std() * np.sqrt(TRADING_DAYS) * 100
+            if not pd.isna(annual_vol):
+                all_volatilities.append(annual_vol)
+                benchmark_volatilities.append(annual_vol)
+
+    if not all_volatilities:
+        # Return empty figure if no data
+        return go.Figure()
+
+    # Calculate statistics
+    median_vol = np.median(all_volatilities)
+    benchmark_median_vol = np.median(benchmark_volatilities) if benchmark_volatilities else median_vol
+
+    # Create KDE (density curve)
+    all_vols_array = np.array(all_volatilities)
+    kde = stats.gaussian_kde(all_vols_array)
+    x_range = np.linspace(max(0, all_vols_array.min() - 2), all_vols_array.max() + 2, 200)
+    density = kde(x_range)
+
+    fig = go.Figure()
+
+    # Add density curve
+    fig.add_trace(go.Scatter(
+        x=x_range,
+        y=density,
+        mode='lines',
+        fill='tozeroy',
+        line=dict(color='#8b5cf6', width=2),
+        fillcolor='rgba(139, 92, 246, 0.2)',
+        name='Distribution',
+        hovertemplate='Volatility: %{x:.1f}%<extra></extra>'
+    ))
+
+    # Add median line
+    fig.add_vline(
+        x=median_vol,
+        line_dash="dash",
+        line_color="#10b981",
+        line_width=2,
+        annotation=dict(
+            text=f"Median: {median_vol:.1f}%",
+            textangle=0,
+            font=dict(size=9, color='#10b981'),
+            yanchor='top'
+        )
+    )
+
+    # Add benchmark line
+    fig.add_vline(
+        x=benchmark_median_vol,
+        line_dash="dot",
+        line_color="#ef4444",
+        line_width=2,
+        annotation=dict(
+            text=f"Benchmark: {benchmark_median_vol:.1f}%",
+            textangle=0,
+            font=dict(size=9, color='#ef4444'),
+            yanchor='bottom'
+        )
+    )
+
+    fig.update_layout(
+        title=dict(text="Volatility Distribution", font=dict(size=13, weight='bold', color='#334155')),
+        height=140,
+        margin=dict(l=15, r=15, t=35, b=35),
+        template='plotly_white',
+        showlegend=False,
+        xaxis=dict(
+            showticklabels=True,
+            title='',
+            showgrid=False
+        ),
+        yaxis=dict(
+            showticklabels=False,
+            title='',
+            showgrid=False
+        ),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)'
+    )
+
+    return fig
+
+def create_sharpe_distribution(returns_dict, benchmark_returns, start_date, end_date, risk_free_rate=0.0249):
+    """Create density curve of annual Sharpe ratio distribution
+
+    Args:
+        returns_dict: Dictionary {fund_name: returns_series}
+        benchmark_returns: Series with benchmark returns
+        start_date: Start date for analysis
+        end_date: End date for analysis
+        risk_free_rate: Risk-free rate for calculations
+
+    Returns:
+        Plotly figure
+    """
+    import plotly.graph_objects as go
+    from scipy import stats
+
+    TRADING_DAYS = 252
+
+    # Get all years in the range
+    all_years = list(range(start_date.year, end_date.year + 1))
+
+    # Collect all annual Sharpe ratios from all funds
+    all_sharpes = []
+
+    for fund_name, returns in returns_dict.items():
+        for year in all_years:
+            # Get returns for this year
+            year_returns = returns[returns.index.year == year]
+            if len(year_returns) > 20:  # At least 20 trading days
+                annual_return = year_returns.mean() * TRADING_DAYS
+                annual_vol = year_returns.std() * np.sqrt(TRADING_DAYS)
+                if annual_vol > 0 and not pd.isna(annual_return):
+                    sharpe = (annual_return - risk_free_rate) / annual_vol
+                    all_sharpes.append(sharpe)
+
+    # Calculate benchmark annual Sharpe ratios
+    benchmark_sharpes = []
+    for year in all_years:
+        year_returns = benchmark_returns[benchmark_returns.index.year == year]
+        if len(year_returns) > 20:
+            annual_return = year_returns.mean() * TRADING_DAYS
+            annual_vol = year_returns.std() * np.sqrt(TRADING_DAYS)
+            if annual_vol > 0 and not pd.isna(annual_return):
+                sharpe = (annual_return - risk_free_rate) / annual_vol
+                all_sharpes.append(sharpe)
+                benchmark_sharpes.append(sharpe)
+
+    if not all_sharpes:
+        # Return empty figure if no data
+        return go.Figure()
+
+    # Calculate statistics
+    median_sharpe = np.median(all_sharpes)
+    benchmark_median_sharpe = np.median(benchmark_sharpes) if benchmark_sharpes else median_sharpe
+
+    # Create KDE (density curve)
+    all_sharpes_array = np.array(all_sharpes)
+    kde = stats.gaussian_kde(all_sharpes_array)
+    x_range = np.linspace(all_sharpes_array.min() - 0.5, all_sharpes_array.max() + 0.5, 200)
+    density = kde(x_range)
+
+    fig = go.Figure()
+
+    # Add density curve
+    fig.add_trace(go.Scatter(
+        x=x_range,
+        y=density,
+        mode='lines',
+        fill='tozeroy',
+        line=dict(color='#f59e0b', width=2),
+        fillcolor='rgba(245, 158, 11, 0.2)',
+        name='Distribution',
+        hovertemplate='Sharpe: %{x:.2f}<extra></extra>'
+    ))
+
+    # Add median line
+    fig.add_vline(
+        x=median_sharpe,
+        line_dash="dash",
+        line_color="#10b981",
+        line_width=2,
+        annotation=dict(
+            text=f"Median: {median_sharpe:.2f}",
+            textangle=0,
+            font=dict(size=9, color='#10b981'),
+            yanchor='top'
+        )
+    )
+
+    # Add benchmark line
+    fig.add_vline(
+        x=benchmark_median_sharpe,
+        line_dash="dot",
+        line_color="#ef4444",
+        line_width=2,
+        annotation=dict(
+            text=f"Benchmark: {benchmark_median_sharpe:.2f}",
+            textangle=0,
+            font=dict(size=9, color='#ef4444'),
+            yanchor='bottom'
+        )
+    )
+
+    fig.update_layout(
+        title=dict(text="Sharpe Ratio Distribution", font=dict(size=13, weight='bold', color='#334155')),
+        height=140,
+        margin=dict(l=15, r=15, t=35, b=35),
+        template='plotly_white',
+        showlegend=False,
+        xaxis=dict(
+            showticklabels=True,
+            title='',
+            showgrid=False
+        ),
+        yaxis=dict(
+            showticklabels=False,
+            title='',
+            showgrid=False
+        ),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)'
+    )
+
+    return fig
+
+def create_max_drawdown_distribution(returns_dict, benchmark_returns):
+    """Create density curve showing max drawdown distribution
+
+    Args:
+        returns_dict: Dictionary {fund_name: returns_series}
+        benchmark_returns: Series with benchmark returns
+
+    Returns:
+        Plotly figure
+    """
+    import plotly.graph_objects as go
+    from scipy import stats
+
+    # Calculate max drawdown for each fund
+    max_drawdowns = []
+    for fund_name, returns in returns_dict.items():
+        cumulative = (1 + returns).cumprod()
+        running_max = cumulative.expanding().max()
+        drawdown = (cumulative - running_max) / running_max
+        max_dd = drawdown.min() * 100  # Convert to percentage
+        max_drawdowns.append(max_dd)
+
+    # Calculate benchmark max drawdown and find the year it occurred
+    bench_cumulative = (1 + benchmark_returns).cumprod()
+    bench_running_max = bench_cumulative.expanding().max()
+    bench_drawdown = (bench_cumulative - bench_running_max) / bench_running_max
+    bench_max_dd = bench_drawdown.min() * 100
+    bench_max_dd_date = bench_drawdown.idxmin()
+    bench_max_dd_year = bench_max_dd_date.year if hasattr(bench_max_dd_date, 'year') else 'N/A'
+
+    max_drawdowns.append(bench_max_dd)
+    median_dd = np.median(max_drawdowns)
+
+    # Create KDE (density curve)
+    dd_array = np.array(max_drawdowns)
+    kde = stats.gaussian_kde(dd_array)
+    x_range = np.linspace(dd_array.min() - 2, dd_array.max() + 2, 200)
+    density = kde(x_range)
+
+    fig = go.Figure()
+
+    # Add density curve
+    fig.add_trace(go.Scatter(
+        x=x_range,
+        y=density,
+        mode='lines',
+        fill='tozeroy',
+        line=dict(color='#ef4444', width=2),
+        fillcolor='rgba(239, 68, 68, 0.2)',
+        name='Distribution',
+        hovertemplate='Max DD: %{x:.1f}%<extra></extra>'
+    ))
+
+    # Add median line
+    fig.add_vline(
+        x=median_dd,
+        line_dash="dash",
+        line_color="#10b981",
+        line_width=2,
+        annotation=dict(
+            text=f"Median: {median_dd:.1f}%",
+            textangle=0,
+            font=dict(size=9, color='#10b981'),
+            yanchor='top'
+        )
+    )
+
+    # Add benchmark line with year annotation
+    fig.add_vline(
+        x=bench_max_dd,
+        line_dash="dot",
+        line_color="#ef4444",
+        line_width=2,
+        annotation=dict(
+            text=f"Benchmark: {bench_max_dd:.1f}% ({bench_max_dd_year})",
+            textangle=0,
+            font=dict(size=9, color='#ef4444'),
+            yanchor='bottom'
+        )
+    )
+
+    fig.update_layout(
+        title=dict(text="Max Drawdown Distribution", font=dict(size=13, weight='bold', color='#334155')),
+        height=140,
+        margin=dict(l=15, r=15, t=35, b=35),
+        template='plotly_white',
+        showlegend=False,
+        xaxis=dict(
+            showticklabels=True,
+            title='',
+            showgrid=False
+        ),
+        yaxis=dict(
+            showticklabels=False,
+            title='',
+            showgrid=False
+        ),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)'
+    )
+
+    return fig
+
 def create_bubble_scatter_chart(metrics_df, x_metric, y_metric, size_metric, fund_name_col='Fund',
                                  benchmark_x=None, benchmark_y=None):
     """Create bubble scatter chart with customizable metrics
@@ -883,6 +1721,15 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
     # Get all unique years in the date range (including incomplete years like current year)
     years = list(range(start_date.year, end_date.year + 1))
 
+    # Create display names by stripping IDs (everything after "|")
+    display_names = {}
+    for fund_name in returns_dict.keys():
+        if '|' in fund_name:
+            display_name = fund_name.split('|')[0].strip()
+        else:
+            display_name = fund_name
+        display_names[fund_name] = display_name
+
     # Calculate metrics for each fund for each year
     fund_year_data = []
 
@@ -930,6 +1777,9 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
                 })
 
     # Add benchmark data
+    benchmark_full_name = f"🔷 {benchmark_name}"
+    display_names[benchmark_full_name] = benchmark_name  # Add benchmark to display_names
+
     for year in years:
         year_start = pd.Timestamp(f"{year}-01-01")
         year_end = pd.Timestamp(f"{year}-12-31")
@@ -956,7 +1806,7 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
                 annual_return = total_return * 100
 
                 fund_year_data.append({
-                    'Fund': f"🔷 {benchmark_name}",
+                    'Fund': benchmark_full_name,
                     'Year': year,
                     'CAGR': cagr,
                     'Annual Return': annual_return,
@@ -981,34 +1831,34 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
     # Rank funds by CAGR for each year (break ties by fund name for consistency)
     df['Rank'] = df.groupby('Year')['CAGR'].rank(ascending=False, method='first').astype(int)
 
-    # Create pivot for heatmap (Rank x Year -> CAGR for coloring)
-    pivot_cagr = df.pivot(index='Rank', columns='Year', values='CAGR')
+    # Calculate average rank for each fund across all years
+    avg_ranks = df.groupby('Fund')['Rank'].mean()
 
-    # Sort by rank
-    pivot_cagr = pivot_cagr.sort_index()
+    # Sort funds by average rank (best performers first)
+    fund_order = avg_ranks.sort_values().index.tolist()
 
-    # Create annotations with fund name and metrics
+    # Create pivot for heatmap (Fund x Year -> CAGR for coloring)
+    pivot_cagr = df.pivot(index='Fund', columns='Year', values='CAGR')
+
+    # Reorder rows by average rank (best performers at top)
+    pivot_cagr = pivot_cagr.reindex(fund_order)
+
+    # Create annotations with rank and metrics for each fund
     annotations = []
 
-    for rank in pivot_cagr.index:
+    for fund_name in pivot_cagr.index:
         for year in pivot_cagr.columns:
-            # Get fund data for this rank and year
-            fund_data = df[(df['Rank'] == rank) & (df['Year'] == year)]
+            # Get fund data for this fund and year
+            fund_data = df[(df['Fund'] == fund_name) & (df['Year'] == year)]
 
             if not fund_data.empty:
                 row = fund_data.iloc[0]
-                fund_name = row['Fund']
-
-                # Truncate long fund names
-                display_name = fund_name.split(' - ')[0] if ' - ' in fund_name else fund_name
-                if len(display_name) > 20:
-                    display_name = display_name[:17] + '...'
 
                 # Check if this is a benchmark
                 is_benchmark = fund_name.startswith('🔷')
 
-                # Create multi-line annotation
-                text = f"<b>{display_name}</b><br>" \
+                # Create multi-line annotation (showing Rank first, then metrics)
+                text = f"<b>Rank: {row['Rank']:.0f}</b><br>" \
                        f"Ann Ret: {row['Annual Return']:.1f}%<br>" \
                        f"CAGR: {row['CAGR']:.1f}%<br>" \
                        f"SR: {row['Sharpe']:.2f} | DD: {row['Max DD']:.1f}%<br>" \
@@ -1019,7 +1869,7 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
                     annotations.append(
                         dict(
                             x=year,
-                            y=rank,
+                            y=fund_name,
                             text=text,
                             showarrow=False,
                             font=dict(size=9, color='#1e40af', family='Arial Black'),  # Bold blue font
@@ -1035,7 +1885,7 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
                     annotations.append(
                         dict(
                             x=year,
-                            y=rank,
+                            y=fund_name,
                             text=text,
                             showarrow=False,
                             font=dict(size=9, color='black'),
@@ -1050,21 +1900,21 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
         x=pivot_cagr.columns,
         y=pivot_cagr.index,
         colorscale=[
-            [0, 'rgba(30, 64, 175, 0.3)'],      # Dark blue for low CAGR (30% opacity)
-            [0.5, 'rgba(59, 130, 246, 0.3)'],   # Blue for medium (30% opacity)
-            [1, 'rgba(165, 243, 252, 0.5)']     # Light cyan for high CAGR (50% opacity)
+            [0, 'rgba(220, 38, 38, 0.4)'],      # Red for low CAGR (40% opacity)
+            [0.5, 'rgba(234, 179, 8, 0.35)'],   # Yellow for medium (35% opacity)
+            [1, 'rgba(34, 197, 94, 0.5)']       # Green for high CAGR (50% opacity)
         ],
         zmid=0,  # Center colorscale at 0
         text=pivot_cagr.values,
-        hovertemplate='Year: %{x}<br>Rank: %{y}<br>CAGR: %{z:.2f}%<extra></extra>',
+        hovertemplate='Year: %{x}<br>Fund: %{y}<br>CAGR: %{z:.2f}%<extra></extra>',
         colorbar=dict(
             title=dict(text="CAGR (%)", side="right"),
             tickmode="linear",
             tick0=pivot_cagr.min().min(),
             dtick=(pivot_cagr.max().max() - pivot_cagr.min().min()) / 5
         ),
-        xgap=2,  # Horizontal gap between cells (border)
-        ygap=2   # Vertical gap between cells (border)
+        xgap=1,  # Horizontal gap between cells (reduced for more cell space)
+        ygap=1   # Vertical gap between cells (reduced for more cell space)
     ))
 
     # Add annotations
@@ -1073,14 +1923,42 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
     # Update layout
     mode_text = "Annual Performance" if ranking_mode == 'annual' else "Cumulative Performance from Start"
 
+    # Function to wrap long text labels
+    def wrap_label(text, width=40):
+        """Wrap text at specified character width"""
+        if len(text) <= width:
+            return text
+        words = text.split()
+        lines = []
+        current_line = []
+        current_length = 0
+
+        for word in words:
+            if current_length + len(word) + 1 <= width:
+                current_line.append(word)
+                current_length += len(word) + 1
+            else:
+                lines.append(' '.join(current_line))
+                current_line = [word]
+                current_length = len(word)
+
+        if current_line:
+            lines.append(' '.join(current_line))
+
+        return '<br>'.join(lines)
+
+    # Create clean Y-axis labels with wrapping (fund names without IDs)
+    yaxis_labels = [wrap_label(display_names[fn]) for fn in pivot_cagr.index]
+
     fig.update_layout(
         title=dict(
-            text=f"Performance Ranking Grid - {mode_text}",
+            text=f"Performance Ranking Grid - {mode_text} (Sorted by Avg Rank)",
             font=dict(size=18, weight='bold')
         ),
         xaxis_title="Year",
-        yaxis_title="Rank (1 = Best)",
-        height=max(400, len(pivot_cagr.index) * 80),  # Dynamic height based on number of funds
+        yaxis_title="Fund Name",
+        height=max(600, len(pivot_cagr.index) * 80),  # Dynamic height based on number of funds (larger cells)
+        margin=dict(l=250, r=50, t=100, b=50),  # Increased left margin for wrapped labels
         template='plotly_white',
         xaxis=dict(
             side='top',
@@ -1090,8 +1968,10 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
             gridcolor='white'
         ),
         yaxis=dict(
-            autorange='reversed',  # Rank 1 at top
-            dtick=1,
+            autorange='reversed',  # Best performers (lowest avg rank) at top
+            tickmode='array',
+            tickvals=list(range(len(pivot_cagr.index))),
+            ticktext=yaxis_labels,
             showgrid=True,
             gridwidth=2,
             gridcolor='white'

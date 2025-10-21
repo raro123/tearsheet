@@ -8,8 +8,13 @@ from src.data_loader import calculate_returns
 from src.metrics import calculate_all_metrics
 from src.visualizations import (
     create_category_equity_curves,
-    create_annual_returns_bubble_chart,
-    create_annual_returns_subplots,
+    create_annual_returns_table,
+    create_correlation_heatmap,
+    create_cagr_distribution,
+    create_annual_returns_distribution,
+    create_volatility_distribution,
+    create_sharpe_distribution,
+    create_max_drawdown_distribution,
     create_bubble_scatter_chart,
     create_rolling_metric_chart,
     create_performance_ranking_grid
@@ -31,10 +36,6 @@ def render(data_loader):
     Args:
         data_loader: R2DataLoader instance from session state
     """
-    st.title("📈 Fund Category Deepdive")
-    st.markdown("Compare multiple funds within a category")
-    st.markdown("---")
-
     # Sidebar Filters
     with st.sidebar:
         st.header("⚙️ Analysis Settings")
@@ -182,45 +183,67 @@ def render(data_loader):
         st.header(f"📊 Category: {selected_category_level1} - {selected_category_level2}")
         st.caption(f"Period: {start_date} to {end_date} ({period_desc}) | {len(funds_returns)} funds")
 
-        # Summary metrics
-        col1, col2, col3, col4 = st.columns(4)
+        # Summary metrics - 5 columns with sleek visualizations
+        col1, col2, col3, col4, col5 = st.columns(5)
 
         with col1:
-            avg_return = metrics_df['CAGR'].mean() * 100
-            st.metric("Avg CAGR", f"{avg_return:.2f}%")
+            # CAGR Distribution
+            fig_cagr = create_cagr_distribution(metrics_df, benchmark_metrics['CAGR'])
+            st.plotly_chart(fig_cagr, use_container_width=True)
 
         with col2:
-            avg_sharpe = metrics_df['Sharpe Ratio'].mean()
-            st.metric("Avg Sharpe", f"{avg_sharpe:.2f}")
+            # Annual Returns Distribution
+            fig_returns_dist = create_annual_returns_distribution(
+                funds_returns, benchmark_returns, start_date, end_date
+            )
+            st.plotly_chart(fig_returns_dist, use_container_width=True)
 
         with col3:
-            avg_volatility = metrics_df['Volatility (ann.)'].mean() * 100
-            st.metric("Avg Volatility", f"{avg_volatility:.2f}%")
+            # Volatility Distribution
+            fig_vol_dist = create_volatility_distribution(
+                funds_returns, benchmark_returns, start_date, end_date, risk_free_rate
+            )
+            st.plotly_chart(fig_vol_dist, use_container_width=True)
 
         with col4:
-            avg_drawdown = metrics_df['Max Drawdown'].mean() * 100
-            st.metric("Avg Max DD", f"{avg_drawdown:.2f}%")
+            # Sharpe Ratio Distribution
+            fig_sharpe_dist = create_sharpe_distribution(
+                funds_returns, benchmark_returns, start_date, end_date, risk_free_rate
+            )
+            st.plotly_chart(fig_sharpe_dist, use_container_width=True)
+
+        with col5:
+            # Max Drawdown Distribution
+            fig_dd_dist = create_max_drawdown_distribution(
+                funds_returns, benchmark_returns
+            )
+            st.plotly_chart(fig_dd_dist, use_container_width=True)
 
         st.markdown("---")
 
         # Chart 1: Cumulative Returns - Equity Curves
         st.subheader("📈 Equity Curves - Cumulative Returns")
-        st.caption("Compare cumulative performance of all funds in the category")
 
-        fig1 = create_category_equity_curves(funds_returns, benchmark_returns, benchmark_name)
+        col_caption, col_log = st.columns([4, 1])
+        with col_caption:
+            st.caption("Compare cumulative performance of all funds in the category")
+        with col_log:
+            log_scale = st.checkbox("Log Scale", value=False, key="equity_log_scale")
+
+        fig1 = create_category_equity_curves(funds_returns, benchmark_returns, benchmark_name, log_scale=log_scale)
         st.plotly_chart(fig1, use_container_width=True)
 
         st.markdown("---")
 
-        # Chart 2: Annual Returns Subplots
+        # Chart 2: Annual Returns Table
         st.subheader("📊 Annual Returns by Year")
-        st.caption("Horizontal layout showing fund performance from newest to oldest year (scroll right for older years)")
+        st.caption("Sortable table with Beat Benchmark count (X/Y format), CAGR, and annual returns. Green = beat benchmark, Red = underperformed. Click column headers to sort.")
 
-        fig2 = create_annual_returns_subplots(
+        styled_df = create_annual_returns_table(
             funds_returns, benchmark_returns, benchmark_name,
             start_date, end_date
         )
-        st.plotly_chart(fig2, use_container_width=False)
+        st.dataframe(styled_df, use_container_width=True, height=600)
 
         # # Chart 2: Annual Returns Bubble Chart (Commented for experimentation)
         # # st.subheader("📊 Annual Returns by Year")
@@ -230,6 +253,17 @@ def render(data_loader):
         # #     start_date, end_date
         # # )
         # # st.plotly_chart(fig2, use_container_width=True)
+
+        st.markdown("---")
+
+        # Correlation Matrix
+        st.subheader("🔗 Correlation Matrix")
+        st.caption("Correlation of monthly returns between all funds and benchmark. Red indicates lower correlation, green indicates stronger positive correlation.")
+
+        fig_corr = create_correlation_heatmap(
+            funds_returns, benchmark_returns, benchmark_name
+        )
+        st.plotly_chart(fig_corr, use_container_width=True)
 
         st.markdown("---")
 
