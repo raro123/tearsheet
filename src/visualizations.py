@@ -1,6 +1,8 @@
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
+from plotly.subplots import make_subplots
+from scipy import stats
 
 def create_cumulative_returns_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name):
     """Create cumulative returns comparison chart"""
@@ -2113,3 +2115,274 @@ def create_rolling_metric_chart(returns_dict, benchmark_returns, benchmark_name,
     )
 
     return fig
+
+
+def create_distribution_chart(data_df, value_column, category_column, 
+                              title, xlabel, order_by='median', 
+                              add_zero_line=True, decimal_places=2):
+    """
+    Create an interactive distribution chart with KDE curves for each category.
+    
+    Parameters:
+    -----------
+    data_df : pandas.DataFrame
+        The dataframe containing the data
+    value_column : str
+        Column name containing the values to plot
+    category_column : str
+        Column name containing the categories
+    title : str
+        Main title for the chart
+    xlabel : str
+        Label for x-axis
+    order_by : str, default='median'
+        How to order categories: 'median', 'mean', or provide a list of categories
+    add_zero_line : bool, default=True
+        Whether to add a vertical line at x=0
+    decimal_places : int, default=2
+        Number of decimal places for statistics
+        
+    Returns:
+    --------
+    plotly.graph_objects.Figure
+        The interactive Plotly figure
+    """
+    
+    # Get category order
+    if isinstance(order_by, list):
+        category_order = order_by
+    elif order_by == 'median':
+        category_order = data_df.groupby(category_column)[value_column].median().sort_values(ascending=False).index
+    elif order_by == 'mean':
+        category_order = data_df.groupby(category_column)[value_column].mean().sort_values(ascending=False).index
+    else:
+        category_order = data_df[category_column].unique()
+    
+    # Create subplots
+    fig = make_subplots(
+        rows=len(category_order), 
+        cols=1,
+        subplot_titles=[f'<b>{cat}</b>' for cat in category_order],
+        vertical_spacing=0.03
+    )
+    
+    # Create a chart for each category
+    for idx, category in enumerate(category_order):
+        cat_data = data_df[data_df[category_column] == category][value_column].dropna()
+        
+        if len(cat_data) < 2:
+            continue
+        
+        # Calculate statistics
+        mean_val = cat_data.mean()
+        median_val = cat_data.median()
+        std_val = cat_data.std()
+        count = len(cat_data)
+        min_val = cat_data.min()
+        max_val = cat_data.max()
+        
+        # Calculate KDE
+        try:
+            kde = stats.gaussian_kde(cat_data)
+            x_range = np.linspace(cat_data.min() - abs(cat_data.min())*0.1, 
+                                 cat_data.max() + abs(cat_data.max())*0.1, 300)
+            kde_values = kde(x_range)
+        except:
+            # Fallback if KDE fails (e.g., all same values)
+            x_range = np.linspace(cat_data.min(), cat_data.max(), 100)
+            kde_values = np.zeros_like(x_range)
+        
+        # Add KDE curve
+        fig.add_trace(
+            go.Scatter(
+                x=x_range,
+                y=kde_values,
+                name=category,
+                mode='lines',
+                line=dict(color='steelblue', width=3),
+                fill='tozeroy',
+                fillcolor='rgba(70, 130, 180, 0.3)',
+                showlegend=False,
+                hovertemplate=f'{xlabel}: %{{x:.{decimal_places}f}}<br>Density: %{{y:.4f}}<extra></extra>'
+            ),
+            row=idx+1, 
+            col=1
+        )
+        
+        # Add mean line
+        fig.add_vline(
+            x=mean_val, 
+            line=dict(color='red', dash='dash', width=2),
+            row=idx+1, 
+            col=1
+        )
+        
+        # Add median line
+        fig.add_vline(
+            x=median_val, 
+            line=dict(color='green', dash='dash', width=2),
+            row=idx+1, 
+            col=1
+        )
+        
+        # Add zero line if requested
+        if add_zero_line:
+            fig.add_vline(
+                x=0, 
+                line=dict(color='black', width=1),
+                opacity=0.3,
+                row=idx+1, 
+                col=1
+            )
+        
+        # Add annotation box with statistics
+        annotation_text = (
+            f'<b>Statistics (n={count})</b><br>'
+            f'Mean: {mean_val:.{decimal_places}f}<br>'
+            f'Median: {median_val:.{decimal_places}f}<br>'
+            f'Std Dev: {std_val:.{decimal_places}f}<br>'
+            f'Range: [{min_val:.{decimal_places}f}, {max_val:.{decimal_places}f}]'
+        )
+        
+        xref_str = f'x{idx+1} domain' if idx > 0 else 'x domain'
+        yref_str = f'y{idx+1} domain' if idx > 0 else 'y domain'
+        
+        fig.add_annotation(
+            text=annotation_text,
+            xref=xref_str,
+            yref=yref_str,
+            x=0.98,
+            y=0.98,
+            xanchor='right',
+            yanchor='top',
+            showarrow=False,
+            bgcolor='rgba(255, 255, 255, 0.9)',
+            bordercolor='black',
+            borderwidth=1,
+            font=dict(size=9),
+            align='left'
+        )
+        
+        # Update axes
+        fig.update_xaxes(
+            title_text=xlabel if idx == len(category_order)-1 else '',
+            row=idx+1, 
+            col=1,
+            showgrid=True,
+            gridcolor='lightgray',
+            gridwidth=0.5
+        )
+        
+        fig.update_yaxes(
+            title_text='Density',
+            row=idx+1, 
+            col=1,
+            showgrid=True,
+            gridcolor='lightgray',
+            gridwidth=0.5,
+            range=[0, kde_values.max() * 1.1] if kde_values.max() > 0 else [0, 1]
+        )
+    
+    # Update overall layout
+    fig.update_layout(
+        title=dict(
+            text=f'<b>{title}</b><br><sub>Ordered by {order_by.capitalize()}</sub>',
+            font=dict(size=18),
+            x=0.5,
+            xanchor='center'
+        ),
+        height=len(category_order) * 300,
+        showlegend=False,
+        template='plotly_white',
+        hovermode='x unified'
+    )
+    
+    return fig
+
+
+def create_return_distribution_chart(equity_df, order_by='median'):
+    """
+    Convenience function specifically for return distributions.
+    
+    Parameters:
+    -----------
+    equity_df : pandas.DataFrame
+        Dataframe with columns: scheme_category_level2, log_return (or pct_return)
+    order_by : str or list
+        How to order categories
+        
+    Returns:
+    --------
+    plotly.graph_objects.Figure
+    """
+    # Convert log returns to percentage if needed
+    if 'pct_return' not in equity_df.columns and 'log_return' in equity_df.columns:
+        equity_df = equity_df.copy()
+        equity_df['pct_return'] = (np.exp(equity_df['log_return']) - 1) * 100
+    
+    return create_distribution_chart(
+        data_df=equity_df,
+        value_column='pct_return',
+        category_column='scheme_category_level2',
+        title='Annual Return Distributions by Equity Scheme Category',
+        xlabel='Annual Return (%)',
+        order_by=order_by,
+        add_zero_line=True,
+        decimal_places=1
+    )
+
+
+def create_metric_distribution_chart(metrics_df, metric_name, order_by='median'):
+    """
+    Convenience function for creating metric distribution charts.
+    
+    Parameters:
+    -----------
+    metrics_df : pandas.DataFrame
+        Dataframe with columns: category, and metric columns
+    metric_name : str
+        One of: 'annual_volatility', 'sharpe_ratio', 'max_drawdown'
+    order_by : str or list
+        How to order categories
+        
+    Returns:
+    --------
+    plotly.graph_objects.Figure
+    """
+    
+    metric_configs = {
+        'annual_volatility': {
+            'title': 'Annual Volatility Distribution by Equity Scheme Category',
+            'xlabel': 'Annual Volatility (%)',
+            'add_zero_line': False,
+            'decimal_places': 2
+        },
+        'sharpe_ratio': {
+            'title': 'Sharpe Ratio Distribution by Equity Scheme Category',
+            'xlabel': 'Sharpe Ratio (Risk-free rate: 6%)',
+            'add_zero_line': True,
+            'decimal_places': 2
+        },
+        'max_drawdown': {
+            'title': 'Maximum Drawdown Distribution by Equity Scheme Category',
+            'xlabel': 'Maximum Drawdown (%)',
+            'add_zero_line': True,
+            'decimal_places': 2
+        }
+    }
+    
+    if metric_name not in metric_configs:
+        raise ValueError(f"metric_name must be one of {list(metric_configs.keys())}")
+    
+    config = metric_configs[metric_name]
+    
+    return create_distribution_chart(
+        data_df=metrics_df,
+        value_column=metric_name,
+        category_column='category',
+        title=config['title'],
+        xlabel=config['xlabel'],
+        order_by=order_by,
+        add_zero_line=config['add_zero_line'],
+        decimal_places=config['decimal_places']
+    )

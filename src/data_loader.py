@@ -183,13 +183,53 @@ class R2DataLoader:
 
             # Sort by date
             df_wide = df_wide.sort_index()
-
             return df_wide
+            
+        except Exception as e:
+            st.error(f"Failed to load fund data: {str(e)}")
+            return None
 
+
+    @st.cache_data
+    def load_fund_data_long(_self, start_date=None, end_date=None, selected_fund_schemes=None):
+        """Load fund data from R2 and pivot to wide format for analysis"""
+
+        if not _self.conn:
+            return None
+
+        try:
+            # Build the query to get the long format data with plan type from metadata
+            scheme_codes = tuple(code.split('|')[1] for code in selected_fund_schemes)
+            query = f"""
+                SELECT
+                    nav.date,
+                    nav.scheme_code,
+                    nav.scheme_name,
+                    nav.nav,
+                    meta.scheme_category_level1,
+                    meta.scheme_category_level2,
+                    CASE WHEN meta.is_direct THEN 'Direct' ELSE 'Regular' END as plan_type
+                FROM mf_nav_daily_long nav
+                LEFT JOIN mf_scheme_metadata meta ON nav.scheme_code = meta.scheme_code
+                WHERE nav.date >= '{start_date}'
+                  AND nav.date <= '{end_date}'
+                  AND nav.scheme_code IN {scheme_codes}
+            """
+            df_long = _self.conn.execute(query).df()
+
+            if df_long.empty:
+                return None
+
+            # Convert date to datetime
+            df_long['date'] = pd.to_datetime(df_long['date'])
+            # Create display name with plan type to match selection format
+            df_long['display_name'] = df_long['scheme_name'] + ' - ' + df_long['plan_type'] + ' |' + df_long['scheme_code'].astype(str)
 
         except Exception as e:
             st.error(f"Failed to load fund data: {str(e)}")
             return None
+        
+        return df_long
     
     @st.cache_data
     def get_data_date_range(_self):

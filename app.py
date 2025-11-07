@@ -56,9 +56,13 @@ def fund_deepdive_page():
     """Wrapper for fund deepdive page"""
     page_fund_deepdive.render(st.session_state.data_loader)
 
+def fund_universe_page():
+    """Wrapper for fund universe page"""
+    page_fund_universe.render(st.session_state.data_loader)
+
 # Navigation setup
 pg = st.navigation([
-    st.Page(page_fund_universe.render, title="Fund Universe", icon="🌐", default=False),
+    st.Page(fund_universe_page, title="Fund Universe", icon="🌐", default=False),
     st.Page(category_deepdive_page, title="Category Deepdive", icon="📈", default=True),
     st.Page(fund_deepdive_page, title="Fund Deepdive", icon="🔍")
 ])

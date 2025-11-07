@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 def format_metric_value(metric_name, value):
     """Format metric value for display"""
@@ -109,3 +110,28 @@ def get_period_description(start_date, end_date):
         return f"{years:.1f} year"
     else:
         return f"{years:.1f} years"
+    
+
+group_cols = ['scheme_code', 
+        'scheme_name',
+      'plan_type','scheme_category_level1','scheme_category_level2','display_name']
+    
+def prepare_data_for_fund_universe(df,group_cols=group_cols):
+        analysis_df = (df
+                        .sort_values(['scheme_code', 'date'], ascending=[True, True])
+                        .assign(
+                        perc_return = lambda x:x.groupby('scheme_code') ['nav'].pct_change(),
+                        log_return  = lambda x:np.log1p(x['perc_return'])
+                        )
+            )
+        
+        annual_df = (analysis_df
+        .groupby([*group_cols, pd.Grouper(key='date',freq='YE')],dropna=False)['log_return'].sum()
+        .reset_index()
+        )
+        
+        return annual_df
+        
+
+    
+    
