@@ -13,14 +13,14 @@ from src.shared_components import (
     filter_funds_by_plan_type
 )
 
-from src.visualizations import (create_return_distribution_chart)
+from src.visualizations import (create_return_box_plot_chart)
 
-from utils.helpers import prepare_data_for_fund_universe
+from utils.helpers import prepare_data_for_fund_universe, calculate_fund_metrics_table
+import pandas as pd
 
 def render(data_loader):
     """Render the Fund Universe page"""
     st.title("🌐 Mutual Fund Universe")
-    st.markdown("---")
     with st.sidebar:
         st.header("⚙️ Analysis Settings")
 
@@ -82,12 +82,140 @@ def render(data_loader):
         )
         
     analysis_df = prepare_data_for_fund_universe(df)
-    
+
     # Chart 1: Cumulative Returns - Equity Curves
-    st.subheader("📈 Fund Universe Metrics")
-    return_distribution_fig = create_return_distribution_chart(analysis_df)
+    st.subheader("📊 Return Distribution by Category")
+    return_distribution_fig, category_order = create_return_box_plot_chart(analysis_df)
     st.plotly_chart(return_distribution_fig, use_container_width=True)
 
-        
-        
+    # Calculate metrics for table
+    st.markdown("---")
+    st.subheader("📋 Category & Fund Metrics")
+
+    with st.spinner("Calculating metrics..."):
+        fund_metrics_df, category_metrics_df = calculate_fund_metrics_table(df, risk_free_rate / 100)
+
+    # Sort categories to match boxplot order
+    category_metrics_df['category'] = pd.Categorical(
+        category_metrics_df['category'],
+        categories=category_order,
+        ordered=True
+    )
+    category_metrics_df = category_metrics_df.sort_values('category')
+
+    # Display collapsible table for each category
+    for _, cat_row in category_metrics_df.iterrows():
+        category = cat_row['category']
+
+        # Create expander header with category-level metrics
+        header = f"**{category}** | Median Return: {cat_row['median_return']*100:.0f}% | Mean Return: {cat_row['mean_return']*100:.0f}% | Median Vol: {cat_row['median_volatility']*100:.0f}% | DD Range: {cat_row['min_drawdown']*100:.0f}% to {cat_row['max_drawdown']*100:.0f}% | Sharpe Range: {cat_row['min_sharpe']:.1f} to {cat_row['max_sharpe']:.1f}"
+
+        with st.expander(header, expanded=False):
+            # Get funds in this category
+            category_funds = fund_metrics_df[fund_metrics_df['category'] == category].copy()
+
+            # Sort by CAGR descending
+            category_funds = category_funds.sort_values('CAGR', ascending=False)
+
+            # Prepare display dataframe with ALL metrics
+            display_df = category_funds[[
+                'display_name',
+                'data_range',
+                'annual_return_trend',
+                'Cumulative Return',
+                'CAGR',
+                'Volatility (ann.)',
+                'Sharpe Ratio',
+                'Sortino Ratio',
+                'Calmar Ratio',
+                'Omega Ratio',
+                'Max Drawdown',
+                'Avg Drawdown',
+                'Longest DD Days',
+                'Lower Tail Ratio',
+                'Upper Tail Ratio'
+            ]].copy()
+
+            # Rename columns for display
+            display_df.columns = [
+                'Fund',
+                'Data Range',
+                'Annual Return Trend',
+                'Cumulative Return',
+                'CAGR',
+                'Volatility (ann.)',
+                'Sharpe Ratio',
+                'Sortino Ratio',
+                'Calmar Ratio',
+                'Omega Ratio',
+                'Max Drawdown',
+                'Avg Drawdown',
+                'Longest DD Days',
+                'Lower Tail Ratio',
+                'Upper Tail Ratio'
+            ]
+
+            # Convert percentage metrics (stored as 0.15 for 15%)
+            pct_cols = ['Cumulative Return', 'CAGR', 'Volatility (ann.)', 'Max Drawdown']
+            for col in pct_cols:
+                display_df[col] = display_df[col] * 100  # Convert to percentage
+
+            # Configure columns using st.column_config
+            column_config = {}
+
+            # Text column for fund name
+            column_config['Fund'] = st.column_config.TextColumn(
+                'Fund',
+                help="Fund name and code",
+                width="large"
+            )
+
+            # Text column for data range
+            column_config['Data Range'] = st.column_config.TextColumn(
+                'Data Range',
+                help="Date range of available data (YYYY-YYYY format)",
+                width="small"
+            )
+
+            # Line chart column for annual return trend
+            column_config['Annual Return Trend'] = st.column_config.LineChartColumn(
+                'Annual Return Trend',
+                help="Annual returns (%) for each year in the selected period",
+                y_min=-50,
+                y_max=100
+            )
+
+            # Percentage columns (show as "15.23%" for 15.23)
+            for col in pct_cols:
+                column_config[col] = st.column_config.NumberColumn(
+                    col,
+                    format="%.2f%%",
+                    help=f"{col} as percentage"
+                )
+
+            # Other numeric columns (show as "1.25" for 1.25)
+            for col in ['Sharpe Ratio', 'Sortino Ratio', 'Calmar Ratio', 'Omega Ratio',
+                        'Avg Drawdown', 'Lower Tail Ratio', 'Upper Tail Ratio']:
+                column_config[col] = st.column_config.NumberColumn(
+                    col,
+                    format="%.2f"
+                )
+
+            # Integer column for longest drawdown days
+            column_config['Longest DD Days'] = st.column_config.NumberColumn(
+                'Longest DD Days',
+                format="%d",
+                help="Duration of longest drawdown in days"
+            )
+
+            # Display table with configuration
+            st.dataframe(
+                display_df,
+                use_container_width=True,
+                hide_index=True,
+                height=400,  # Fixed height like category deepdive
+                column_config=column_config
+            )
+
+            st.caption(f"📊 {len(category_funds)} fund(s) in {category}")
 

@@ -131,7 +131,95 @@ def prepare_data_for_fund_universe(df,group_cols=group_cols):
         )
         
         return annual_df
-        
 
-    
-    
+
+def calculate_fund_metrics_table(df, risk_free_rate=0.0249):
+    """
+    Calculate comprehensive metrics for each fund and category.
+
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        Raw fund data with columns: date, scheme_code, scheme_name, nav,
+        scheme_category_level2, display_name
+    risk_free_rate : float
+        Annual risk-free rate (default: 2.49%)
+
+    Returns:
+    --------
+    tuple: (fund_metrics_df, category_metrics_df)
+        - fund_metrics_df: DataFrame with all metrics for each fund
+        - category_metrics_df: DataFrame with aggregated category metrics
+    """
+    from src.metrics import calculate_all_metrics
+
+    # Calculate daily returns for each fund
+    fund_data = (df
+        .sort_values(['scheme_code', 'date'], ascending=[True, True])
+        .assign(
+            returns=lambda x: x.groupby('scheme_code')['nav'].pct_change()
+        )
+    )
+
+    # Calculate metrics for each fund
+    fund_metrics = []
+
+    for (scheme_code, scheme_name, category, display_name), group in fund_data.groupby(
+        ['scheme_code', 'scheme_name', 'scheme_category_level2', 'display_name']
+    ):
+        returns = group['returns'].dropna()
+
+        if len(returns) > 0:
+            # Calculate all metrics using the comprehensive function
+            all_metrics = calculate_all_metrics(
+                returns=returns,
+                benchmark_returns=None,  # No benchmark for fund universe
+                risk_free_rate=risk_free_rate
+            )
+
+            # Calculate annual returns for sparkline
+            # Set date as index for resampling
+            returns_with_date = group.set_index('date')['returns'].dropna()
+            annual_returns = returns_with_date.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+            annual_returns_list = annual_returns.tolist()
+
+            # Get date range
+            start_year = group['date'].min().year
+            end_year = group['date'].max().year
+            data_range = f"{start_year}-{end_year}"
+
+            # Combine everything
+            metrics = {
+                'scheme_code': scheme_code,
+                'scheme_name': scheme_name,
+                'display_name': display_name,
+                'category': category,
+                'data_range': data_range,
+                'annual_return_trend': annual_returns_list,
+                **all_metrics  # Unpack all calculated metrics
+            }
+            fund_metrics.append(metrics)
+
+    fund_metrics_df = pd.DataFrame(fund_metrics)
+
+    # Calculate category-level aggregates
+    category_metrics = fund_metrics_df.groupby('category').agg({
+        'CAGR': ['median', 'mean'],
+        'Volatility (ann.)': 'median',
+        'Max Drawdown': ['min', 'max'],
+        'Sharpe Ratio': ['min', 'max']
+    }).reset_index()
+
+    # Flatten column names
+    category_metrics.columns = [
+        'category',
+        'median_return',
+        'mean_return',
+        'median_volatility',
+        'min_drawdown',
+        'max_drawdown',
+        'min_sharpe',
+        'max_sharpe'
+    ]
+
+    return fund_metrics_df, category_metrics

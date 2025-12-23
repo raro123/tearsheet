@@ -2333,6 +2333,119 @@ def create_return_distribution_chart(equity_df, order_by='median'):
     )
 
 
+def create_return_box_plot_chart(equity_df, order_by='median'):
+    """
+    Create vertical box plots showing annual return distributions by equity scheme category.
+
+    Parameters:
+    -----------
+    equity_df : pandas.DataFrame
+        Dataframe with columns: scheme_category_level2, log_return
+    order_by : str or list, default='median'
+        How to order categories: 'median', 'mean', or provide list of categories
+
+    Returns:
+    --------
+    tuple
+        (plotly.graph_objects.Figure, list):
+        - Figure: Interactive Plotly box plot figure
+        - category_order: List of category names in display order
+    """
+    # Convert log returns to percentage if needed
+    if 'pct_return' not in equity_df.columns and 'log_return' in equity_df.columns:
+        equity_df = equity_df.copy()
+        equity_df['pct_return'] = (np.exp(equity_df['log_return']) - 1) * 100
+
+    # Calculate statistics for ordering
+    category_stats = equity_df.groupby('scheme_category_level2')['pct_return'].agg([
+        ('median', 'median'),
+        ('mean', 'mean'),
+        ('count', 'count')
+    ]).reset_index()
+
+    # Determine category order
+    if isinstance(order_by, list):
+        category_order = order_by
+    elif order_by == 'median':
+        category_order = category_stats.sort_values('median', ascending=False)['scheme_category_level2'].tolist()
+    elif order_by == 'mean':
+        category_order = category_stats.sort_values('mean', ascending=False)['scheme_category_level2'].tolist()
+    else:
+        category_order = category_stats['scheme_category_level2'].tolist()
+
+    # Create figure
+    fig = go.Figure()
+
+    # Add box plot for each category
+    for category in category_order:
+        category_data = equity_df[equity_df['scheme_category_level2'] == category]
+        n_funds = len(category_data)
+
+        fig.add_trace(go.Box(
+            y=category_data['pct_return'],
+            x=[category] * len(category_data),
+            name=category,
+            marker=dict(
+                color='#64748b',
+                opacity=0.6,
+                outliercolor='#ef4444',
+                line=dict(width=0)
+            ),
+            line=dict(color='#334155', width=1.5),
+            fillcolor='rgba(100, 116, 139, 0.25)',
+            boxmean=True,  # Show mean as dashed line
+            boxpoints='outliers',  # Show outliers only
+            showlegend=False,
+            hovertemplate=(
+                '<b>%{fullData.name}</b><br>' +
+                'Return: %{y:.0f}%<br>' +
+                f'N: {n_funds}<br>' +
+                '<extra></extra>'
+            )
+        ))
+
+    # Add zero reference line
+    fig.add_hline(
+        y=0,
+        line=dict(color='#d1d5db', width=1),
+        opacity=0.8
+    )
+
+    # Update layout
+    fig.update_layout(
+        title=dict(
+            text='<b>Annual Return Distributions by Equity Scheme Category</b><br>' +
+                 '<sub>Ordered by Median Return</sub>',
+            font=dict(size=18),
+            x=0.5,
+            xanchor='center'
+        ),
+        xaxis_title='Scheme Category',
+        yaxis_title='Annual Return (%)',
+        height=700,
+        template='plotly_white',
+        hovermode='closest',
+        showlegend=False,
+        xaxis=dict(
+            showgrid=False,
+            categoryorder='array',
+            categoryarray=category_order,  # Explicit ordering
+            tickangle=-45
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='#e5e7eb',
+            zeroline=True,
+            zerolinewidth=2,
+            zerolinecolor='#9ca3af'
+        ),
+        margin=dict(l=80, r=50, t=100, b=150)  # Extra bottom margin for angled labels
+    )
+
+    return fig, category_order
+
+
 def create_metric_distribution_chart(metrics_df, metric_name, order_by='median'):
     """
     Convenience function for creating metric distribution charts.
