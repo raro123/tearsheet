@@ -2163,7 +2163,8 @@ def create_distribution_chart(data_df, value_column, category_column,
         rows=len(category_order), 
         cols=1,
         subplot_titles=[f'<b>{cat}</b>' for cat in category_order],
-        vertical_spacing=0.03
+        vertical_spacing=0.01,
+        shared_xaxes=True
     )
     
     # Create a chart for each category

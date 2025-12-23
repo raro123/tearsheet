@@ -91,3 +91,6 @@ debug_*.py
 .pytest_cache/
 .coverage
 htmlcov/
+
+#ignore jupyter stuff
+notebooks/

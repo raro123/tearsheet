@@ -342,6 +342,40 @@ class R2DataLoader:
         except Exception as e:
             st.error(f"Failed to load benchmark data: {str(e)}")
             return None
+        
+    def load_fund_data_all(_self):
+        """Load fund data from R2 and pivot to wide format for analysis"""
+        print("0")
+        if not _self.conn:
+            print("1")
+            return None
+
+        try:
+            print("2")
+            query = f"""
+                SELECT
+                    nav.date,
+                    nav.scheme_code,
+                    nav.scheme_name,
+                    nav.nav,
+                    meta.scheme_category_level1,
+                    meta.scheme_category_level2,
+                    CASE WHEN meta.is_direct THEN 'Direct' ELSE 'Regular' END as plan_type
+                FROM mf_nav_daily_long nav
+                LEFT JOIN mf_scheme_metadata meta ON nav.scheme_code = meta.scheme_code
+            """
+            df_long = _self.conn.execute(query).df()
+            print("executed")
+            # Convert date to datetime
+            df_long['date'] = pd.to_datetime(df_long['date'])
+            return df_long
+
+        except Exception as e:
+            print(e)
+            st.error(f"Failed to load fund data: {str(e)}")
+            return None
+        
+
 
 # Initialize global data loader
 @st.cache_resource
