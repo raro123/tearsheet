@@ -207,7 +207,7 @@ def render(data_loader):
 
         # Calculate benchmark metrics using cache
         benchmark_metrics = get_cached_metrics(
-            selected_index_name, benchmark_returns, None,
+            selected_benchmark_index, benchmark_returns, None,
             risk_free_rate, start_date, end_date
         )
 
@@ -228,10 +228,10 @@ def render(data_loader):
 
         # Cache benchmark annual/monthly returns
         benchmark_annual = get_cached_annual_returns(
-            selected_index_name, benchmark_returns, start_date, end_date
+            selected_benchmark_index, benchmark_returns, start_date, end_date
         )
         benchmark_monthly = get_cached_monthly_returns(
-            selected_index_name, benchmark_returns, start_date, end_date
+            selected_benchmark_index, benchmark_returns, start_date, end_date
         )
 
         # Display summary
