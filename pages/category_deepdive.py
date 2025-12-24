@@ -6,6 +6,7 @@ import streamlit as st
 import pandas as pd
 from src.data_loader import calculate_returns
 from src.metrics import calculate_all_metrics
+from src.computation_cache import get_cached_metrics, get_cached_annual_returns, get_cached_monthly_returns
 from src.visualizations import (
     create_category_equity_curves,
     create_annual_returns_table,
@@ -164,8 +165,11 @@ def render(data_loader):
                     fund_returns = calculate_returns(fund_nav)
                     funds_returns[fund_name] = fund_returns
 
-                    # Calculate metrics
-                    fund_metrics = calculate_all_metrics(fund_returns, benchmark_returns, risk_free_rate)
+                    # Calculate metrics using session cache (prevents triple calculation)
+                    fund_metrics = get_cached_metrics(
+                        fund_name, fund_returns, benchmark_returns,
+                        risk_free_rate, start_date, end_date
+                    )
                     fund_metrics['Fund'] = fund_name
                     funds_metrics.append(fund_metrics)
 
@@ -173,11 +177,34 @@ def render(data_loader):
             st.error("❌ No valid fund data available for selected funds")
             return
 
-        # Calculate benchmark metrics
-        benchmark_metrics = calculate_all_metrics(benchmark_returns, risk_free_rate=risk_free_rate)
+        # Calculate benchmark metrics using cache
+        benchmark_metrics = get_cached_metrics(
+            selected_index_name, benchmark_returns, None,
+            risk_free_rate, start_date, end_date
+        )
 
         # Create metrics DataFrame
         metrics_df = pd.DataFrame(funds_metrics)
+
+        # Pre-compute annual and monthly returns for all funds (prevents redundant resampling)
+        annual_returns_cache = {}
+        monthly_returns_cache = {}
+
+        for fund_name in funds_returns.keys():
+            annual_returns_cache[fund_name] = get_cached_annual_returns(
+                fund_name, funds_returns[fund_name], start_date, end_date
+            )
+            monthly_returns_cache[fund_name] = get_cached_monthly_returns(
+                fund_name, funds_returns[fund_name], start_date, end_date
+            )
+
+        # Cache benchmark annual/monthly returns
+        benchmark_annual = get_cached_annual_returns(
+            selected_index_name, benchmark_returns, start_date, end_date
+        )
+        benchmark_monthly = get_cached_monthly_returns(
+            selected_index_name, benchmark_returns, start_date, end_date
+        )
 
         # Display summary
         st.header(f"📊 Category: {selected_category_level1} - {selected_category_level2}")
