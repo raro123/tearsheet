@@ -287,77 +287,217 @@ def render(data_loader):
 
         st.markdown("---")
 
-        # Chart 2: Annual Returns Table
-        st.subheader("📊 Annual Returns by Year")
-        st.caption("Sortable table with Beat Benchmark count (X/Y format), CAGR, and annual returns. Green = beat benchmark, Red = underperformed. Click column headers to sort.")
+        # === SECTION 3: DETAILED METRICS TABLE (Collapsible, expanded by default) ===
+        with st.expander("📋 Detailed Metrics Table - Complete performance metrics for all funds", expanded=True):
+            st.caption("Comprehensive metrics including returns, risk measures, and performance indicators")
 
-        styled_df = create_annual_returns_table(
-            funds_returns, benchmark_returns, benchmark_name,
-            start_date, end_date
-        )
-        st.dataframe(styled_df, use_container_width=True, height=600)
+            # Prepare benchmark display
+            benchmark_display = benchmark_metrics.copy()
+            benchmark_display['Fund'] = f"🔷 {benchmark_name}"
 
-        # # Chart 2: Annual Returns Bubble Chart (Commented for experimentation)
-        # # st.subheader("📊 Annual Returns by Year")
-        # # st.caption("Bubble size represents annual volatility")
-        # # fig2 = create_annual_returns_bubble_chart(
-        # #     funds_returns, benchmark_returns, benchmark_name,
-        # #     start_date, end_date
-        # # )
-        # # st.plotly_chart(fig2, use_container_width=True)
+            # Calculate annual returns for benchmark with common year range
+            # Include all years from start to end (including current year if end_date is in it)
+            all_years = list(range(start_date.year, end_date.year + 1))
+            benchmark_annual_returns = benchmark_returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+
+            # Align benchmark returns to all years
+            aligned_benchmark_returns = []
+            benchmark_years_with_data = []
+            for year in all_years:
+                year_data = benchmark_annual_returns[benchmark_annual_returns.index.year == year]
+                if len(year_data) > 0:
+                    aligned_benchmark_returns.append(year_data.iloc[0])
+                    benchmark_years_with_data.append(year)
+                else:
+                    aligned_benchmark_returns.append(0)
+
+            # Create data range string for benchmark
+            if len(benchmark_years_with_data) > 0:
+                first_year = benchmark_years_with_data[0]
+                last_year = benchmark_years_with_data[-1]
+                if first_year == last_year:
+                    benchmark_data_range = str(first_year)
+                else:
+                    benchmark_data_range = f"{first_year}-{last_year}"
+            else:
+                benchmark_data_range = "N/A"
+
+            benchmark_display['Annual Return Trend'] = aligned_benchmark_returns
+            benchmark_display['Data Range'] = benchmark_data_range
+
+            # Create benchmark DataFrame with Fund column first
+            benchmark_df = pd.DataFrame([benchmark_display])
+
+            # Remove unwanted columns from benchmark
+            columns_to_remove = [
+                'Expected Monthly Return',
+                'Expected Daily Return',
+                'Win Rate',
+                'Max Consecutive Wins',
+                'Skewness',
+                'VaR (95%)',
+                'CVaR (95%)',
+                'R²'
+            ]
+            benchmark_df = benchmark_df.drop(columns=[col for col in columns_to_remove if col in benchmark_df.columns])
+
+            # Reorder columns to put Fund first, then Data Range, then Annual Return Trend
+            cols = ['Fund', 'Data Range', 'Annual Return Trend'] + [col for col in benchmark_df.columns if col not in ['Fund', 'Data Range', 'Annual Return Trend']]
+            benchmark_df = benchmark_df[cols]
+
+            # Convert percentage columns from decimal to percentage (0.1 -> 10.0) for benchmark
+            pct_cols = ['Cumulative Return', 'CAGR', 'Volatility (ann.)', 'Max Drawdown']
+            for col in pct_cols:
+                if col in benchmark_df.columns:
+                    benchmark_df[col] = benchmark_df[col] * 100
+
+            # Create column config for benchmark
+            benchmark_column_config = {}
+            benchmark_column_config['Data Range'] = st.column_config.TextColumn(
+                'Data Range',
+                help="Date range of available data (YYYY-YYYY format)",
+                width="small"
+            )
+            benchmark_column_config['Annual Return Trend'] = st.column_config.LineChartColumn(
+                'Annual Return Trend',
+                help="Annual returns (%) for each year in the selected period",
+                y_min=-50,
+                y_max=100
+            )
+            for col in benchmark_df.columns:
+                if col in pct_cols:
+                    benchmark_column_config[col] = st.column_config.NumberColumn(
+                        col,
+                        format="%.2f%%",
+                        help=f"{col} as percentage"
+                    )
+                elif col not in ['Fund', 'Annual Return Trend'] and benchmark_df[col].dtype in ['float64', 'int64']:
+                    benchmark_column_config[col] = st.column_config.NumberColumn(
+                        col,
+                        format="%.2f"
+                    )
+
+            # Display benchmark table (fixed at top)
+            st.markdown("**Benchmark Reference**")
+            st.dataframe(
+                benchmark_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config=benchmark_column_config
+            )
+
+            st.markdown("---")
+
+            # Prepare fund metrics for display
+            display_metrics = metrics_df.copy()
+
+            # Remove unwanted columns
+            columns_to_remove = [
+                'Expected Monthly Return',
+                'Expected Daily Return',
+                'Win Rate',
+                'Max Consecutive Wins',
+                'Skewness',
+                'VaR (95%)',
+                'CVaR (95%)',
+                'R²'
+            ]
+            display_metrics = display_metrics.drop(columns=[col for col in columns_to_remove if col in display_metrics.columns])
+
+            # Calculate annual returns for each fund with common year range
+            # Use the same all_years calculated for benchmark (includes current year)
+            annual_returns_data = {}
+            data_range_map = {}
+
+            for fund_name in final_fund_list:
+                if fund_name in funds_returns:
+                    returns = funds_returns[fund_name]
+                    annual_returns = returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+
+                    # Create a series aligned to all years, with 0 for missing years
+                    aligned_returns = []
+                    years_with_data = []
+                    for year in all_years:
+                        year_data = annual_returns[annual_returns.index.year == year]
+                        if len(year_data) > 0:
+                            aligned_returns.append(year_data.iloc[0])
+                            years_with_data.append(year)
+                        else:
+                            aligned_returns.append(0)
+
+                    annual_returns_data[fund_name] = aligned_returns
+
+                    # Create data range string for this fund
+                    if len(years_with_data) > 0:
+                        first_year = years_with_data[0]
+                        last_year = years_with_data[-1]
+                        if first_year == last_year:
+                            data_range_map[fund_name] = str(first_year)
+                        else:
+                            data_range_map[fund_name] = f"{first_year}-{last_year}"
+                    else:
+                        data_range_map[fund_name] = "N/A"
+
+            # Add annual returns trend column
+            display_metrics['Annual Return Trend'] = display_metrics['Fund'].map(annual_returns_data)
+
+            # Add data range column
+            display_metrics['Data Range'] = display_metrics['Fund'].map(data_range_map)
+
+            # Reorder columns to put Fund first, then Data Range, then Annual Return Trend
+            cols = ['Fund', 'Data Range', 'Annual Return Trend'] + [col for col in display_metrics.columns if col not in ['Fund', 'Data Range', 'Annual Return Trend']]
+            display_metrics = display_metrics[cols]
+
+            # Convert percentage columns from decimal to percentage (0.1 -> 10.0)
+            for col in pct_cols:
+                if col in display_metrics.columns:
+                    display_metrics[col] = display_metrics[col] * 100
+
+            # Create column config for proper formatting
+            column_config = {}
+
+            # Add Data Range column config
+            column_config['Data Range'] = st.column_config.TextColumn(
+                'Data Range',
+                help="Date range of available data (YYYY-YYYY format)",
+                width="small"
+            )
+
+            # Add line chart config for Annual Return Trend
+            column_config['Annual Return Trend'] = st.column_config.LineChartColumn(
+                'Annual Return Trend',
+                help="Annual returns (%) for each year in the selected period",
+                y_min=-50,
+                y_max=100
+            )
+
+            for col in display_metrics.columns:
+                if col in pct_cols:
+                    column_config[col] = st.column_config.NumberColumn(
+                        col,
+                        format="%.2f%%",
+                        help=f"{col} as percentage"
+                    )
+                elif col not in ['Fund', 'Annual Return Trend'] and display_metrics[col].dtype in ['float64', 'int64']:
+                    column_config[col] = st.column_config.NumberColumn(
+                        col,
+                        format="%.2f"
+                    )
+
+            # Display fund metrics table (sortable)
+            st.markdown(f"**Fund Performance ({len(display_metrics)} funds)**")
+            st.dataframe(
+                display_metrics,
+                use_container_width=True,
+                height=400,
+                hide_index=True,
+                column_config=column_config
+            )
 
         st.markdown("---")
 
-        # Correlation Matrix
-        st.subheader("🔗 Correlation Matrix")
-        st.caption("Correlation of monthly returns between all funds and benchmark. Red indicates lower correlation, green indicates stronger positive correlation.")
-
-        fig_corr = create_correlation_heatmap(
-            funds_returns, benchmark_returns, benchmark_name
-        )
-        st.plotly_chart(fig_corr, use_container_width=True)
-
-        st.markdown("---")
-
-        # Chart 3: Bubble Scatter Chart
-        st.subheader("🔵 Multi-Metric Bubble Comparison")
-        st.caption("Explore fund relationships across three metrics simultaneously")
-
-        # Metric selectors
-        col1, col2, col3 = st.columns(3)
-
-        available_metrics = [
-            'Cumulative Return', 'CAGR', 'Volatility (ann.)', 'Max Drawdown',
-            'Sharpe Ratio', 'Sortino Ratio', 'Calmar Ratio'
-        ]
-
-        with col1:
-            x_metric = st.selectbox("X-Axis Metric", available_metrics, index=1, key="x_metric")
-
-        with col2:
-            y_metric = st.selectbox("Y-Axis Metric", available_metrics, index=4, key="y_metric")
-
-        with col3:
-            size_metric = st.selectbox("Bubble Size Metric", available_metrics, index=2, key="size_metric")
-
-        if x_metric == y_metric:
-            st.warning("⚠️ X and Y metrics are the same. Please select different metrics for better visualization.")
-
-        # Get benchmark values for the selected metrics
-        benchmark_x = benchmark_metrics.get(x_metric)
-        benchmark_y = benchmark_metrics.get(y_metric)
-
-        fig3 = create_bubble_scatter_chart(
-            metrics_df, x_metric, y_metric, size_metric,
-            benchmark_x=benchmark_x, benchmark_y=benchmark_y
-        )
-        st.plotly_chart(fig3, use_container_width=True)
-
-        st.markdown("---")
-
-        # Chart 4: Rolling Metrics
-        st.subheader("📉 Rolling Metrics Over Time")
-        st.caption("Analyze how fund metrics evolve over rolling time windows")
+        # === SECTION 4: ROLLING METRICS (Always Visible) ===
+        st.caption("📉 **Rolling Metrics Over Time** | Analyze how fund metrics evolve over rolling time windows")
 
         col1, col2 = st.columns([2, 1])
 
@@ -388,243 +528,87 @@ def render(data_loader):
 
         st.markdown("---")
 
-        # Chart 5: Performance Ranking Grid
-        st.subheader("🏆 Performance Ranking Grid")
-        st.caption("Visual ranking of funds by year with embedded metrics")
+        # === SECTION 5: ANNUAL RETURNS TABLE (Collapsible) ===
+        with st.expander("📊 Annual Returns by Year - Year-over-year performance comparison", expanded=False):
+            st.caption("Sortable table with Beat Benchmark count (X/Y format), CAGR, and annual returns. Green = beat benchmark, Red = underperformed.")
 
-        ranking_mode = st.radio(
-            "Ranking Mode",
-            options=['annual', 'cumulative'],
-            format_func=lambda x: 'Annual (Rank by each year)' if x == 'annual' else 'Cumulative (Rank from start to year end)',
-            index=0,
-            horizontal=True,
-            key="ranking_mode"
-        )
-
-        fig5 = create_performance_ranking_grid(
-            funds_returns, benchmark_returns, benchmark_name,
-            start_date, end_date, risk_free_rate,
-            ranking_mode=ranking_mode
-        )
-        st.plotly_chart(fig5, use_container_width=True)
+            styled_df = create_annual_returns_table(
+                funds_returns, benchmark_returns, benchmark_name,
+                start_date, end_date
+            )
+            st.dataframe(styled_df, use_container_width=True, height=600)
 
         st.markdown("---")
 
-        # Metrics Table
-        st.subheader("📊 Detailed Metrics Table")
-        st.caption("Complete performance metrics for all funds in the category")
+        # === SECTION 6: CORRELATION MATRIX (Collapsible) ===
+        with st.expander("🔗 Correlation Matrix - Fund correlation analysis", expanded=False):
+            st.caption("Correlation of monthly returns between all funds and benchmark. Red indicates lower correlation, green indicates stronger positive correlation.")
 
-        # Prepare benchmark display
-        benchmark_display = benchmark_metrics.copy()
-        benchmark_display['Fund'] = f"🔷 {benchmark_name}"
-
-        # Calculate annual returns for benchmark with common year range
-        # Include all years from start to end (including current year if end_date is in it)
-        all_years = list(range(start_date.year, end_date.year + 1))
-        benchmark_annual_returns = benchmark_returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
-
-        # Align benchmark returns to all years
-        aligned_benchmark_returns = []
-        benchmark_years_with_data = []
-        for year in all_years:
-            year_data = benchmark_annual_returns[benchmark_annual_returns.index.year == year]
-            if len(year_data) > 0:
-                aligned_benchmark_returns.append(year_data.iloc[0])
-                benchmark_years_with_data.append(year)
-            else:
-                aligned_benchmark_returns.append(0)
-
-        # Create data range string for benchmark
-        if len(benchmark_years_with_data) > 0:
-            first_year = benchmark_years_with_data[0]
-            last_year = benchmark_years_with_data[-1]
-            if first_year == last_year:
-                benchmark_data_range = str(first_year)
-            else:
-                benchmark_data_range = f"{first_year}-{last_year}"
-        else:
-            benchmark_data_range = "N/A"
-
-        benchmark_display['Annual Return Trend'] = aligned_benchmark_returns
-        benchmark_display['Data Range'] = benchmark_data_range
-
-        # Create benchmark DataFrame with Fund column first
-        benchmark_df = pd.DataFrame([benchmark_display])
-
-        # Remove unwanted columns from benchmark
-        columns_to_remove = [
-            'Expected Monthly Return',
-            'Expected Daily Return',
-            'Win Rate',
-            'Max Consecutive Wins',
-            'Skewness',
-            'VaR (95%)',
-            'CVaR (95%)',
-            'R²'
-        ]
-        benchmark_df = benchmark_df.drop(columns=[col for col in columns_to_remove if col in benchmark_df.columns])
-
-        # Reorder columns to put Fund first, then Data Range, then Annual Return Trend
-        cols = ['Fund', 'Data Range', 'Annual Return Trend'] + [col for col in benchmark_df.columns if col not in ['Fund', 'Data Range', 'Annual Return Trend']]
-        benchmark_df = benchmark_df[cols]
-
-        # Convert percentage columns from decimal to percentage (0.1 -> 10.0) for benchmark
-        pct_cols = ['Cumulative Return', 'CAGR', 'Volatility (ann.)', 'Max Drawdown']
-        for col in pct_cols:
-            if col in benchmark_df.columns:
-                benchmark_df[col] = benchmark_df[col] * 100
-
-        # Create column config for benchmark
-        benchmark_column_config = {}
-        benchmark_column_config['Data Range'] = st.column_config.TextColumn(
-            'Data Range',
-            help="Date range of available data (YYYY-YYYY format)",
-            width="small"
-        )
-        benchmark_column_config['Annual Return Trend'] = st.column_config.LineChartColumn(
-            'Annual Return Trend',
-            help="Annual returns (%) for each year in the selected period",
-            y_min=-50,
-            y_max=100
-        )
-        for col in benchmark_df.columns:
-            if col in pct_cols:
-                benchmark_column_config[col] = st.column_config.NumberColumn(
-                    col,
-                    format="%.2f%%",
-                    help=f"{col} as percentage"
-                )
-            elif col not in ['Fund', 'Annual Return Trend'] and benchmark_df[col].dtype in ['float64', 'int64']:
-                benchmark_column_config[col] = st.column_config.NumberColumn(
-                    col,
-                    format="%.2f"
-                )
-
-        # Display benchmark table (fixed at top)
-        st.markdown("**Benchmark Reference**")
-        st.dataframe(
-            benchmark_df,
-            use_container_width=True,
-            hide_index=True,
-            column_config=benchmark_column_config
-        )
+            fig_corr = create_correlation_heatmap(
+                funds_returns, benchmark_returns, benchmark_name
+            )
+            st.plotly_chart(fig_corr, use_container_width=True)
 
         st.markdown("---")
 
-        # Prepare fund metrics for display
-        display_metrics = metrics_df.copy()
+        # === SECTION 7: ADVANCED ANALYSIS (Collapsible) ===
+        with st.expander("📊 Advanced Analysis - Multi-metric bubble chart and performance ranking", expanded=False):
 
-        # Remove unwanted columns
-        columns_to_remove = [
-            'Expected Monthly Return',
-            'Expected Daily Return',
-            'Win Rate',
-            'Max Consecutive Wins',
-            'Skewness',
-            'VaR (95%)',
-            'CVaR (95%)',
-            'R²'
-        ]
-        display_metrics = display_metrics.drop(columns=[col for col in columns_to_remove if col in display_metrics.columns])
+            # Bubble Scatter Chart
+            st.subheader("🔵 Multi-Metric Bubble Comparison")
+            st.caption("Explore fund relationships across three metrics simultaneously")
 
-        # Calculate annual returns for each fund with common year range
-        # Use the same all_years calculated for benchmark (includes current year)
-        annual_returns_data = {}
-        data_range_map = {}
+            # Metric selectors
+            col1, col2, col3 = st.columns(3)
 
-        for fund_name in final_fund_list:
-            if fund_name in funds_returns:
-                returns = funds_returns[fund_name]
-                annual_returns = returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+            available_metrics = [
+                'Cumulative Return', 'CAGR', 'Volatility (ann.)', 'Max Drawdown',
+                'Sharpe Ratio', 'Sortino Ratio', 'Calmar Ratio'
+            ]
 
-                # Create a series aligned to all years, with 0 for missing years
-                aligned_returns = []
-                years_with_data = []
-                for year in all_years:
-                    year_data = annual_returns[annual_returns.index.year == year]
-                    if len(year_data) > 0:
-                        aligned_returns.append(year_data.iloc[0])
-                        years_with_data.append(year)
-                    else:
-                        aligned_returns.append(0)
+            with col1:
+                x_metric = st.selectbox("X-Axis Metric", available_metrics, index=1, key="x_metric")
 
-                annual_returns_data[fund_name] = aligned_returns
+            with col2:
+                y_metric = st.selectbox("Y-Axis Metric", available_metrics, index=4, key="y_metric")
 
-                # Create data range string for this fund
-                if len(years_with_data) > 0:
-                    first_year = years_with_data[0]
-                    last_year = years_with_data[-1]
-                    if first_year == last_year:
-                        data_range_map[fund_name] = str(first_year)
-                    else:
-                        data_range_map[fund_name] = f"{first_year}-{last_year}"
-                else:
-                    data_range_map[fund_name] = "N/A"
+            with col3:
+                size_metric = st.selectbox("Bubble Size Metric", available_metrics, index=2, key="size_metric")
 
-        # Add annual returns trend column
-        display_metrics['Annual Return Trend'] = display_metrics['Fund'].map(annual_returns_data)
+            if x_metric == y_metric:
+                st.warning("⚠️ X and Y metrics are the same. Please select different metrics for better visualization.")
 
-        # Add data range column
-        display_metrics['Data Range'] = display_metrics['Fund'].map(data_range_map)
+            # Get benchmark values for the selected metrics
+            benchmark_x = benchmark_metrics.get(x_metric)
+            benchmark_y = benchmark_metrics.get(y_metric)
 
-        # Reorder columns to put Fund first, then Data Range, then Annual Return Trend
-        cols = ['Fund', 'Data Range', 'Annual Return Trend'] + [col for col in display_metrics.columns if col not in ['Fund', 'Data Range', 'Annual Return Trend']]
-        display_metrics = display_metrics[cols]
+            fig3 = create_bubble_scatter_chart(
+                metrics_df, x_metric, y_metric, size_metric,
+                benchmark_x=benchmark_x, benchmark_y=benchmark_y
+            )
+            st.plotly_chart(fig3, use_container_width=True)
 
-        # Convert percentage columns from decimal to percentage (0.1 -> 10.0)
-        for col in pct_cols:
-            if col in display_metrics.columns:
-                display_metrics[col] = display_metrics[col] * 100
+            st.markdown("---")
 
-        # Create column config for proper formatting
-        column_config = {}
+            # Performance Ranking Grid
+            st.subheader("🏆 Performance Ranking Grid")
+            st.caption("Visual ranking of funds by year with embedded metrics")
 
-        # Add Data Range column config
-        column_config['Data Range'] = st.column_config.TextColumn(
-            'Data Range',
-            help="Date range of available data (YYYY-YYYY format)",
-            width="small"
-        )
+            ranking_mode = st.radio(
+                "Ranking Mode",
+                options=['annual', 'cumulative'],
+                format_func=lambda x: 'Annual (Rank by each year)' if x == 'annual' else 'Cumulative (Rank from start to year end)',
+                index=0,
+                horizontal=True,
+                key="ranking_mode"
+            )
 
-        # Add line chart config for Annual Return Trend
-        column_config['Annual Return Trend'] = st.column_config.LineChartColumn(
-            'Annual Return Trend',
-            help="Annual returns (%) for each year in the selected period",
-            y_min=-50,
-            y_max=100
-        )
-
-        for col in display_metrics.columns:
-            if col in pct_cols:
-                column_config[col] = st.column_config.NumberColumn(
-                    col,
-                    format="%.2f%%",
-                    help=f"{col} as percentage"
-                )
-            elif col not in ['Fund', 'Annual Return Trend'] and display_metrics[col].dtype in ['float64', 'int64']:
-                column_config[col] = st.column_config.NumberColumn(
-                    col,
-                    format="%.2f"
-                )
-
-        # Display fund metrics table (sortable)
-        st.markdown(f"**Fund Performance ({len(display_metrics)} funds)**")
-        st.dataframe(
-            display_metrics,
-            use_container_width=True,
-            height=400,
-            hide_index=True,
-            column_config=column_config
-        )
-
-        # Download button
-        csv = metrics_df.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Metrics CSV",
-            data=csv,
-            file_name=f"category_metrics_{selected_category_level1}_{selected_category_level2}_{start_date}_{end_date}.csv",
-            mime="text/csv"
-        )
+            fig5 = create_performance_ranking_grid(
+                funds_returns, benchmark_returns, benchmark_name,
+                start_date, end_date, risk_free_rate,
+                ranking_mode=ranking_mode
+            )
+            st.plotly_chart(fig5, use_container_width=True)
 
         # Footer
         st.markdown("---")
