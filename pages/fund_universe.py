@@ -21,7 +21,9 @@ import pandas as pd
 
 def render(data_loader):
     """Render the Fund Universe page"""
-    st.title("🌐 Mutual Fund Universe")
+    # Page header - compact caption style
+    st.caption("🌐 **Mutual Fund Universe** | Explore and compare funds across categories")
+
     with st.sidebar:
         st.header("⚙️ Analysis Settings")
 
@@ -106,14 +108,14 @@ def render(data_loader):
         
     analysis_df = prepare_data_for_fund_universe(df)
 
-    # Chart 1: Cumulative Returns - Equity Curves
-    st.subheader("📊 Return Distribution by Category")
+    # === SECTION 1: RETURN DISTRIBUTION ===
+    st.caption(f"📊 **Return Distribution by Category** | Period: {start_date} to {end_date} ({period_desc}) | {len(final_fund_list)} funds")
     return_distribution_fig, category_order = create_return_box_plot_chart(analysis_df)
     st.plotly_chart(return_distribution_fig, use_container_width=True)
 
-    # Calculate metrics for table
+    # === SECTION 2: CATEGORY & FUND METRICS ===
     st.markdown("---")
-    st.subheader("📋 Category & Fund Metrics")
+    st.caption("📋 **Category & Fund Metrics** | Expand each category to view detailed fund performance")
 
     with st.spinner("Calculating metrics..."):
         fund_metrics_df, category_metrics_df = calculate_fund_metrics_table(

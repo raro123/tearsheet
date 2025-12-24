@@ -31,9 +31,8 @@ def render(data_loader):
     Args:
         data_loader: R2DataLoader instance from session state
     """
-    st.title("🔍 Fund Deepdive")
-    st.markdown("Comprehensive performance analysis for a single fund")
-    st.markdown("---")
+    # Page header - compact caption style
+    st.caption("🔍 **Fund Deepdive** | Comprehensive performance analysis for a single fund")
 
     # Sidebar Configuration
     with st.sidebar:
@@ -233,11 +232,8 @@ def render(data_loader):
         risk_free_rate, start_date, end_date
     )
 
-    # Main Content Area
-
-    # Summary Cards
-    st.header(f"📊 Performance Summary")
-    st.caption(f"{strategy_name} vs {benchmark_name}")
+    # === SECTION 1: PERFORMANCE SUMMARY ===
+    st.caption(f"📊 **{strategy_name}** vs **{benchmark_name}** | Period: {start_date} to {end_date} ({period_desc})")
 
     col1, col2, col3, col4, col5 = st.columns(5)
 
@@ -285,12 +281,12 @@ def render(data_loader):
 
     st.markdown("---")
 
-    # Charts and Metrics
+    # === SECTION 2: CHARTS & METRICS ===
     col_left, col_right = st.columns([2, 1])
 
     with col_left:
         # Cumulative Returns
-        on = st.toggle("Log Scale Y-Axis", value=False, key="fd_log_scale")
+        on = st.toggle("Log Scale Y-Axis", value=True, key="fd_log_scale")
         if not on:
             st.plotly_chart(
                 create_cumulative_returns_chart(
@@ -346,7 +342,7 @@ def render(data_loader):
 
     with col_right:
         # Metrics Table
-        st.subheader("📊 Performance Metrics")
+        st.caption("📊 **Performance Metrics**")
 
         # Get data periods
         strategy_data_start = strategy_nav.index.min().strftime('%Y-%m-%d')
@@ -402,9 +398,9 @@ def render(data_loader):
             mime="text/csv"
         )
 
-    # Monthly Returns Tables
+    # === SECTION 3: MONTHLY RETURNS ===
     st.markdown("---")
-    st.subheader("📅 Monthly Returns (%)")
+    st.caption("📅 **Monthly Returns (%)** | Color-coded heatmap showing monthly performance")
 
     col1, col2 = st.columns(2)
 
