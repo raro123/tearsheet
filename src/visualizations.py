@@ -370,7 +370,7 @@ def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_na
 
     return fig
 
-def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_name, log_scale=False):
+def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_name, log_scale=False, selected_funds=None):
     """Create equity curves for multiple funds in a category with monthly resolution showing growth of ₹100
 
     Args:
@@ -378,6 +378,7 @@ def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_nam
         benchmark_returns: Series with benchmark returns
         benchmark_name: String name of benchmark
         log_scale: Boolean, if True uses logarithmic y-axis
+        selected_funds: List of fund names to highlight with color (others shown in grayscale)
 
     Returns:
         Plotly figure
@@ -407,13 +408,32 @@ def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_nam
                 cagrs.append(0)
         return cagrs
 
+    # Grayscale color for unselected funds
+    grayscale_color = '#999999'
+
     # Add each fund's equity curve
     for idx, (fund_name, returns) in enumerate(returns_dict.items()):
         # Resample to monthly
         monthly_returns = resample_to_monthly(returns)
         # Calculate cumulative returns on monthly data
         cum_returns = (1 + monthly_returns).cumprod()
-        color = colors[idx % len(colors)]
+
+        # Determine styling based on selection
+        if selected_funds is None:
+            # No selection mode: use colors for all (backward compatibility)
+            color = colors[idx % len(colors)]
+            opacity = 0.7
+            width = 1.5
+        elif fund_name in selected_funds:
+            # Selected: use color palette
+            color = colors[idx % len(colors)]
+            opacity = 0.8  # Slightly more opaque when selected
+            width = 2.0    # Slightly thicker
+        else:
+            # Not selected: grayscale
+            color = grayscale_color
+            opacity = 0.3  # More transparent
+            width = 1.0    # Thinner
 
         # Calculate growth of 100
         growth_values = cum_returns * 100
@@ -429,10 +449,10 @@ def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_nam
             x=cum_returns.index,
             y=growth_values,
             name=fund_name,
-            line=dict(color=color, width=1.5),
+            line=dict(color=color, width=width),
             customdata=customdata,
             hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Value: ₹%{y:.2f}<br>CAGR: %{customdata[0]:.2f}%<extra></extra>',
-            opacity=0.7
+            opacity=opacity
         ))
 
     # Add benchmark (thicker, distinct line)
@@ -1983,7 +2003,7 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
     return fig
 
 def create_rolling_metric_chart(returns_dict, benchmark_returns, benchmark_name,
-                                  metric_type, window, risk_free_rate=0.0249, window_label=None):
+                                  metric_type, window, risk_free_rate=0.0249, window_label=None, selected_funds=None):
     """Create rolling metric chart for multiple funds with monthly resolution
 
     Args:
@@ -1994,6 +2014,7 @@ def create_rolling_metric_chart(returns_dict, benchmark_returns, benchmark_name,
         window: Rolling window size in days (will be converted to months)
         risk_free_rate: Risk-free rate for Sharpe calculation
         window_label: Optional custom label for window (e.g., "1 Year", "3 Years")
+        selected_funds: List of fund names to highlight with color (others shown in grayscale)
 
     Returns:
         Plotly figure
@@ -2009,6 +2030,9 @@ def create_rolling_metric_chart(returns_dict, benchmark_returns, benchmark_name,
         '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899',
         '#06b6d4', '#f97316', '#84cc16', '#6366f1', '#14b8a6'
     ]
+
+    # Grayscale color for unselected funds
+    grayscale_color = '#999999'
 
     def resample_to_monthly(returns):
         """Resample daily returns to monthly returns"""
@@ -2053,15 +2077,30 @@ def create_rolling_metric_chart(returns_dict, benchmark_returns, benchmark_name,
         # Drop NaN values to avoid showing initial period with insufficient data
         metric_values = metric_values.dropna()
 
-        color = colors[idx % len(colors)]
+        # Determine styling based on selection
+        if selected_funds is None:
+            # No selection mode: use colors for all (backward compatibility)
+            color = colors[idx % len(colors)]
+            opacity = 0.7
+            width = 1.5
+        elif fund_name in selected_funds:
+            # Selected: use color palette
+            color = colors[idx % len(colors)]
+            opacity = 0.8  # Slightly more opaque when selected
+            width = 2.0    # Slightly thicker
+        else:
+            # Not selected: grayscale
+            color = grayscale_color
+            opacity = 0.3  # More transparent
+            width = 1.0    # Thinner
 
         fig.add_trace(go.Scatter(
             x=metric_values.index,
             y=metric_values,
             name=fund_name,
-            line=dict(color=color, width=1.5),
+            line=dict(color=color, width=width),
             hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Value: %{y:.2f}<extra></extra>',
-            opacity=0.7
+            opacity=opacity
         ))
 
     # Add benchmark

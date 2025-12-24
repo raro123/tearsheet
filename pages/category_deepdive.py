@@ -282,7 +282,14 @@ def render(data_loader):
         with col_log:
             log_scale = st.checkbox("Log Scale", value=True, key="equity_log_scale")
 
-        fig1 = create_category_equity_curves(funds_returns, benchmark_returns, benchmark_name, log_scale=log_scale)
+        # Get selected funds from session state (empty list if none selected = all grayscale)
+        selected_for_charts = st.session_state.get('selected_funds_for_highlight', [])
+
+        fig1 = create_category_equity_curves(
+            funds_returns, benchmark_returns, benchmark_name,
+            log_scale=log_scale,
+            selected_funds=selected_for_charts
+        )
         st.plotly_chart(fig1, use_container_width=True)
 
         st.markdown("---")
@@ -444,8 +451,11 @@ def render(data_loader):
             # Add data range column
             display_metrics['Data Range'] = display_metrics['Fund'].map(data_range_map)
 
-            # Reorder columns to put Fund first, then Data Range, then Annual Return Trend
-            cols = ['Fund', 'Data Range', 'Annual Return Trend'] + [col for col in display_metrics.columns if col not in ['Fund', 'Data Range', 'Annual Return Trend']]
+            # Add checkbox column as FIRST column (default: all unchecked)
+            display_metrics.insert(0, '✓ Select', False)
+
+            # Reorder columns to put checkbox first, then Fund, then Data Range, then Annual Return Trend
+            cols = ['✓ Select', 'Fund', 'Data Range', 'Annual Return Trend'] + [col for col in display_metrics.columns if col not in ['✓ Select', 'Fund', 'Data Range', 'Annual Return Trend']]
             display_metrics = display_metrics[cols]
 
             # Convert percentage columns from decimal to percentage (0.1 -> 10.0)
@@ -455,6 +465,14 @@ def render(data_loader):
 
             # Create column config for proper formatting
             column_config = {}
+
+            # Configure checkbox column (FIRST COLUMN)
+            column_config['✓ Select'] = st.column_config.CheckboxColumn(
+                '✓ Select',
+                help="Select fund to highlight in charts (colored line)",
+                default=False,
+                width="small"
+            )
 
             # Add Data Range column config
             column_config['Data Range'] = st.column_config.TextColumn(
@@ -484,47 +502,62 @@ def render(data_loader):
                         format="%.2f"
                     )
 
-            # Display fund metrics table (sortable)
+            # Display fund metrics table (editable checkboxes only)
             st.markdown(f"**Fund Performance ({len(display_metrics)} funds)**")
-            st.dataframe(
+            st.caption("💡 Tip: Check the box in the first column to highlight that fund in color on the equity curve and rolling charts")
+
+            # Get list of all columns except the checkbox
+            all_columns_except_checkbox = [col for col in display_metrics.columns if col != '✓ Select']
+
+            edited_df = st.data_editor(
                 display_metrics,
                 use_container_width=True,
                 height=400,
                 hide_index=True,
-                column_config=column_config
+                column_config=column_config,
+                disabled=all_columns_except_checkbox,  # All columns except checkbox are read-only
+                key="fund_metrics_editor"
             )
+
+            # Extract selected funds from edited dataframe and store in session state
+            selected_funds = edited_df[edited_df['✓ Select'] == True]['Fund'].tolist()
+            st.session_state.selected_funds_for_highlight = selected_funds
 
         st.markdown("---")
 
-        # === SECTION 4: ROLLING METRICS (Always Visible) ===
-        st.caption("📉 **Rolling Metrics Over Time** | Analyze how fund metrics evolve over rolling time windows")
+        # === SECTION 4: ROLLING METRICS (Collapsible) ===
+        with st.expander("📉 Rolling Metrics Over Time - Metric evolution over rolling windows", expanded=False):
+            st.caption("Analyze how fund metrics evolve over rolling time windows")
 
-        col1, col2 = st.columns([2, 1])
+            col1, col2 = st.columns([2, 1])
 
-        with col1:
-            metric_type = st.selectbox(
-                "Select Metric",
-                ["Return", "Volatility", "Sharpe", "Drawdown"],
-                index=0,
-                key="rolling_metric_type"
+            with col1:
+                metric_type = st.selectbox(
+                    "Select Metric",
+                    ["Return", "Volatility", "Sharpe", "Drawdown"],
+                    index=0,
+                    key="rolling_metric_type"
+                )
+
+            with col2:
+                rolling_period = st.selectbox(
+                    "Rolling Period",
+                    options=[("1 Year", 252), ("3 Years", 756), ("5 Years", 1260)],
+                    format_func=lambda x: x[0],
+                    index=0,
+                    key="rolling_period_cat"
+                )
+                window_label = rolling_period[0]
+                window = rolling_period[1]
+
+            selected_for_charts = st.session_state.get('selected_funds_for_highlight', [])
+
+            fig4 = create_rolling_metric_chart(
+                funds_returns, benchmark_returns, benchmark_name,
+                metric_type, window, risk_free_rate, window_label=window_label,
+                selected_funds=selected_for_charts
             )
-
-        with col2:
-            rolling_period = st.selectbox(
-                "Rolling Period",
-                options=[("1 Year", 252), ("3 Years", 756), ("5 Years", 1260)],
-                format_func=lambda x: x[0],
-                index=0,
-                key="rolling_period_cat"
-            )
-            window_label = rolling_period[0]
-            window = rolling_period[1]
-
-        fig4 = create_rolling_metric_chart(
-            funds_returns, benchmark_returns, benchmark_name,
-            metric_type, window, risk_free_rate, window_label=window_label
-        )
-        st.plotly_chart(fig4, use_container_width=True)
+            st.plotly_chart(fig4, use_container_width=True)
 
         st.markdown("---")
 
