@@ -16,6 +16,7 @@ from src.shared_components import (
 from src.visualizations import (create_return_box_plot_chart)
 
 from utils.helpers import prepare_data_for_fund_universe, calculate_fund_metrics_table
+from src.computation_cache import get_cache_stats, clear_cache_on_data_change
 import pandas as pd
 
 def render(data_loader):
@@ -72,6 +73,28 @@ def render(data_loader):
         # Risk-free rate
         risk_free_rate = render_risk_free_rate()
 
+        st.markdown("---")
+
+        # Cache monitoring and control
+        st.subheader("🔍 Performance Monitor")
+
+        # Display cache stats
+        cache_stats = get_cache_stats()
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Metrics Cached", cache_stats['metrics_entries'])
+            st.metric("Annual Returns", cache_stats['annual_returns_entries'])
+        with col2:
+            st.metric("Monthly Returns", cache_stats['monthly_returns_entries'])
+            st.metric("Total Entries", cache_stats['total_entries'])
+
+        # Clear cache button
+        if st.button("🔄 Clear Cache", help="Clear all cached computations", key="fu_clear_cache"):
+            clear_cache_on_data_change()
+            st.cache_data.clear()
+            st.success("✅ Cache cleared!")
+            st.rerun()
+
     # Main Content
     with st.spinner("Loading fund data..."):
         # Load fund data
@@ -93,7 +116,9 @@ def render(data_loader):
     st.subheader("📋 Category & Fund Metrics")
 
     with st.spinner("Calculating metrics..."):
-        fund_metrics_df, category_metrics_df = calculate_fund_metrics_table(df, risk_free_rate / 100)
+        fund_metrics_df, category_metrics_df = calculate_fund_metrics_table(
+            df, risk_free_rate / 100, start_date, end_date
+        )
 
     # Sort categories to match boxplot order
     category_metrics_df['category'] = pd.Categorical(

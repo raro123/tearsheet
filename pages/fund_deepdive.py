@@ -7,6 +7,13 @@ import streamlit as st
 import pandas as pd
 from src.data_loader import calculate_returns
 from src.metrics import calculate_all_metrics
+from src.computation_cache import (
+    get_cached_metrics,
+    get_cached_annual_returns,
+    get_cached_monthly_returns,
+    get_cache_stats,
+    clear_cache_on_data_change
+)
 from src.visualizations import (
     create_cumulative_returns_chart,
     create_log_returns_chart,
@@ -161,7 +168,26 @@ def render(data_loader):
         ) / 100
 
         st.markdown("---")
-        st.caption("Made with Streamlit 📊")
+
+        # Cache monitoring and control
+        st.subheader("🔍 Performance Monitor")
+
+        # Display cache stats
+        cache_stats = get_cache_stats()
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Metrics Cached", cache_stats['metrics_entries'])
+            st.metric("Annual Returns", cache_stats['annual_returns_entries'])
+        with col2:
+            st.metric("Monthly Returns", cache_stats['monthly_returns_entries'])
+            st.metric("Total Entries", cache_stats['total_entries'])
+
+        # Clear cache button
+        if st.button("🔄 Clear Cache", help="Clear all cached computations", key="fd_clear_cache"):
+            clear_cache_on_data_change()
+            st.cache_data.clear()
+            st.success("✅ Cache cleared!")
+            st.rerun()
 
     # Load data
     with st.spinner("Loading data from R2..."):
@@ -197,9 +223,15 @@ def render(data_loader):
     strategy_returns = calculate_returns(strategy_nav)
     benchmark_returns = calculate_returns(benchmark_nav)
 
-    # Calculate metrics
-    strategy_metrics = calculate_all_metrics(strategy_returns, benchmark_returns, risk_free_rate)
-    benchmark_metrics = calculate_all_metrics(benchmark_returns, risk_free_rate=risk_free_rate)
+    # Calculate metrics using session cache
+    strategy_metrics = get_cached_metrics(
+        strategy_name, strategy_returns, benchmark_returns,
+        risk_free_rate, start_date, end_date
+    )
+    benchmark_metrics = get_cached_metrics(
+        benchmark_name, benchmark_returns, None,
+        risk_free_rate, start_date, end_date
+    )
 
     # Main Content Area
 

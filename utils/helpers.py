@@ -133,7 +133,7 @@ def prepare_data_for_fund_universe(df,group_cols=group_cols):
         return annual_df
 
 
-def calculate_fund_metrics_table(df, risk_free_rate=0.0249):
+def calculate_fund_metrics_table(df, risk_free_rate=0.0249, start_date=None, end_date=None):
     """
     Calculate comprehensive metrics for each fund and category.
 
@@ -144,6 +144,10 @@ def calculate_fund_metrics_table(df, risk_free_rate=0.0249):
         scheme_category_level2, display_name
     risk_free_rate : float
         Annual risk-free rate (default: 2.49%)
+    start_date : str or datetime, optional
+        Start date for cache key
+    end_date : str or datetime, optional
+        End date for cache key
 
     Returns:
     --------
@@ -152,6 +156,7 @@ def calculate_fund_metrics_table(df, risk_free_rate=0.0249):
         - category_metrics_df: DataFrame with aggregated category metrics
     """
     from src.metrics import calculate_all_metrics
+    from src.computation_cache import get_cached_metrics, get_cached_annual_returns
 
     # Calculate daily returns for each fund
     fund_data = (df
@@ -170,18 +175,32 @@ def calculate_fund_metrics_table(df, risk_free_rate=0.0249):
         returns = group['returns'].dropna()
 
         if len(returns) > 0:
-            # Calculate all metrics using the comprehensive function
-            all_metrics = calculate_all_metrics(
-                returns=returns,
-                benchmark_returns=None,  # No benchmark for fund universe
-                risk_free_rate=risk_free_rate
-            )
+            # Calculate all metrics using session cache
+            if start_date and end_date:
+                all_metrics = get_cached_metrics(
+                    display_name, returns, None,
+                    risk_free_rate, start_date, end_date
+                )
+            else:
+                # Fallback if dates not provided
+                all_metrics = calculate_all_metrics(
+                    returns=returns,
+                    benchmark_returns=None,
+                    risk_free_rate=risk_free_rate
+                )
 
-            # Calculate annual returns for sparkline
-            # Set date as index for resampling
-            returns_with_date = group.set_index('date')['returns'].dropna()
-            annual_returns = returns_with_date.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
-            annual_returns_list = annual_returns.tolist()
+            # Calculate annual returns using cache
+            if start_date and end_date:
+                returns_with_date = group.set_index('date')['returns'].dropna()
+                annual_returns = get_cached_annual_returns(
+                    display_name, returns_with_date, start_date, end_date
+                )
+                annual_returns_list = (annual_returns * 100).tolist()
+            else:
+                # Fallback calculation
+                returns_with_date = group.set_index('date')['returns'].dropna()
+                annual_returns = returns_with_date.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+                annual_returns_list = annual_returns.tolist()
 
             # Get date range
             start_year = group['date'].min().year
