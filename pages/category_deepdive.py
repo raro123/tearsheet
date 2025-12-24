@@ -234,9 +234,8 @@ def render(data_loader):
             selected_benchmark_index, benchmark_returns, start_date, end_date
         )
 
-        # Display summary
-        st.header(f"📊 Category: {selected_category_level1} - {selected_category_level2}")
-        st.caption(f"Period: {start_date} to {end_date} ({period_desc}) | {len(funds_returns)} funds")
+        # Display summary (caption only, no header)
+        st.caption(f"**{selected_category_level1} - {selected_category_level2}** | Period: {start_date} to {end_date} ({period_desc}) | {len(funds_returns)} funds")
 
         # Summary metrics - 5 columns with sleek visualizations
         col1, col2, col3, col4, col5 = st.columns(5)
@@ -276,14 +275,12 @@ def render(data_loader):
 
         st.markdown("---")
 
-        # Chart 1: Cumulative Returns - Equity Curves
-        st.subheader("📈 Equity Curves - Cumulative Returns")
+        # === SECTION 2: CUMULATIVE RETURN CHART (Always visible) ===
+        st.caption("📈 Compare fund performance over time on linear or logarithmic scale")
 
         col_caption, col_log = st.columns([4, 1])
-        with col_caption:
-            st.caption("Compare cumulative performance of all funds in the category")
         with col_log:
-            log_scale = st.checkbox("Log Scale", value=False, key="equity_log_scale")
+            log_scale = st.checkbox("Log Scale", value=True, key="equity_log_scale")
 
         fig1 = create_category_equity_curves(funds_returns, benchmark_returns, benchmark_name, log_scale=log_scale)
         st.plotly_chart(fig1, use_container_width=True)
