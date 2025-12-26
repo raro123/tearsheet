@@ -25,8 +25,7 @@ from src.visualizations import (
     create_monthly_returns_scatter,
     create_comparison_metrics_table,
     create_performance_overview_subplot,
-    create_rolling_analysis_subplot,
-    create_sip_progression_chart
+    create_rolling_analysis_subplot
 )
 from utils.helpers import create_metrics_comparison_df, get_period_description, create_metric_category_df, highlight_outliers_in_monthly_table, format_sip_table
 from src.shared_components import filter_funds_by_plan_type
@@ -272,6 +271,14 @@ def render(data_loader):
             key="fd_rf_rate"
         ) / 100
 
+        # Log scale toggle
+        log_scale = st.toggle(
+            "Log Scale for Cumulative Returns",
+            value=True,
+            help="Apply logarithmic scale to cumulative returns chart",
+            key="fd_log_scale"
+        )
+
         st.markdown("---")
 
         # Cache monitoring and control
@@ -384,9 +391,20 @@ def render(data_loader):
     # === SECTION 1: PERFORMANCE SUMMARY ===
     # Dynamic header based on comparison fund selection
     if comparison_returns is not None:
-        st.caption(f"📊 **{strategy_name}** vs **{benchmark_name}** vs **{comparison_name}** | Period: {start_date} to {end_date} ({period_desc})")
+        st.caption(
+            f"📊 <span style='color:#f59e0b; font-weight:bold'>{strategy_name}</span> vs "
+            f"<span style='color:#6B7280; font-weight:bold'>{benchmark_name}</span> vs "
+            f"<span style='color:#10b981; font-weight:bold'>{comparison_name}</span> | "
+            f"Period: {start_date} to {end_date} ({period_desc})",
+            unsafe_allow_html=True
+        )
     else:
-        st.caption(f"📊 **{strategy_name}** vs **{benchmark_name}** | Period: {start_date} to {end_date} ({period_desc})")
+        st.caption(
+            f"📊 <span style='color:#f59e0b; font-weight:bold'>{strategy_name}</span> vs "
+            f"<span style='color:#6B7280; font-weight:bold'>{benchmark_name}</span> | "
+            f"Period: {start_date} to {end_date} ({period_desc})",
+            unsafe_allow_html=True
+        )
 
     col1, col2, col3, col4, col5, col6 = st.columns(6)
 
@@ -492,25 +510,15 @@ def render(data_loader):
     st.markdown("---")
 
     # === SECTION 2A: PERFORMANCE OVERVIEW ===
-    # Log scale toggle
-    log_scale = st.toggle("Log Scale for Cumulative Returns", value=True, key="fd_log_scale")
 
-    # SIP Progression Chart (using pre-calculated sip_table_df from KPI section)
-    sip_chart = create_sip_progression_chart(
-        sip_table_df,
-        strategy_name,
-        benchmark_name,
-        comparison_name
-    )
-    st.plotly_chart(sip_chart, use_container_width=True)
-
-    # Single subplot with cumulative returns, drawdown, and annual returns
+    # Integrated 4-row performance overview (SIP + Cumulative + Drawdown + Annual)
     st.plotly_chart(
         create_performance_overview_subplot(
             strategy_returns, benchmark_returns,
             strategy_name, benchmark_name,
             comparison_returns, comparison_name,
-            log_scale=log_scale
+            log_scale=log_scale,
+            sip_table_df=sip_table_df
         ),
         use_container_width=True
     )

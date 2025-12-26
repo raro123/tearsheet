@@ -94,3 +94,6 @@ htmlcov/
 
 #ignore jupyter stuff
 notebooks/
+
+# Terminal Paste Image folder
+.cp-images/

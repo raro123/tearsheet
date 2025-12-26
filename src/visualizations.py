@@ -703,8 +703,9 @@ def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_na
     return fig
 
 def create_performance_overview_subplot(strategy_returns, benchmark_returns, strategy_name, benchmark_name,
-                                        comparison_returns=None, comparison_name=None, log_scale=False):
-    """Create a 3-row subplot with cumulative returns, drawdown, and annual returns
+                                        comparison_returns=None, comparison_name=None, log_scale=False,
+                                        sip_table_df=None):
+    """Create integrated performance overview with SIP, cumulative returns, drawdown, and annual returns
 
     Args:
         strategy_returns: Series with strategy daily returns
@@ -714,21 +715,139 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
         comparison_returns: Optional Series with comparison fund returns
         comparison_name: Optional String name of comparison fund
         log_scale: Boolean, if True uses log scale for cumulative returns subplot
+        sip_table_df: Optional SIP progression table (from create_sip_progression_table)
 
     Returns:
-        Plotly figure with 3 subplots
+        Plotly figure with 4-row subplot (if sip_table_df provided) or 3-row subplot
     """
-    # Create subplot with 3 rows
-    fig = make_subplots(
-        rows=3, cols=1,
-        row_heights=[0.4, 0.3, 0.3],
-        vertical_spacing=0.08,
-        subplot_titles=("Cumulative Returns" + (" (Log Scale)" if log_scale else ""),
-                       "Drawdown Comparison",
-                       "Annual Returns")
-    )
+    # Create subplot with 4 rows (if SIP data provided) or 3 rows
+    if sip_table_df is not None:
+        fig = make_subplots(
+            rows=4, cols=1,
+            row_heights=[0.23, 0.35, 0.24, 0.18],
+            vertical_spacing=0.08,
+            subplot_titles=("SIP Portfolio Growth (₹100/month)",
+                           "Cumulative Returns" + (" (Log Scale)" if log_scale else ""),
+                           "Drawdown Comparison",
+                           "Annual Returns")
+        )
+    else:
+        fig = make_subplots(
+            rows=3, cols=1,
+            row_heights=[0.4, 0.3, 0.3],
+            vertical_spacing=0.08,
+            subplot_titles=("Cumulative Returns" + (" (Log Scale)" if log_scale else ""),
+                           "Drawdown Comparison",
+                           "Annual Returns")
+        )
 
-    # === ROW 1: CUMULATIVE RETURNS ===
+    # === ROW 1: SIP PORTFOLIO GROWTH (if sip_table_df provided) ===
+    if sip_table_df is not None:
+        # Prepare SIP data (remove TOTAL and IRR rows)
+        chart_df = sip_table_df.iloc[:-2].copy()
+        chart_df['Date'] = pd.to_datetime(chart_df['Period'] + '-01')
+
+        # Add Amount Invested (reference line)
+        fig.add_trace(go.Scatter(
+            x=chart_df['Date'],
+            y=chart_df['Invested'],
+            name='Amount Invested',
+            line=dict(color='#9CA3AF', width=2, dash='dash'),
+            hovertemplate='Invested: ₹%{y:,.2f}<extra></extra>',
+            showlegend=True
+        ), row=1, col=1)
+
+        # Add Fund Value
+        fig.add_trace(go.Scatter(
+            x=chart_df['Date'],
+            y=chart_df['Fund Value'],
+            name=strategy_name,
+            line=dict(color='#f59e0b', width=2),
+            hovertemplate=f'{strategy_name}: ₹%{{y:,.2f}}<extra></extra>',
+            showlegend=False  # Already in row 2 legend
+        ), row=1, col=1)
+
+        # Add Benchmark Value
+        fig.add_trace(go.Scatter(
+            x=chart_df['Date'],
+            y=chart_df['Benchmark Value'],
+            name=benchmark_name,
+            line=dict(color='#6B7280', width=2, dash='dash'),
+            hovertemplate=f'{benchmark_name}: ₹%{{y:,.2f}}<extra></extra>',
+            showlegend=False  # Already in row 2 legend
+        ), row=1, col=1)
+
+        # Add Comparison Value (conditional)
+        if comparison_returns is not None and comparison_name is not None:
+            if 'Comp Value' in chart_df.columns:
+                fig.add_trace(go.Scatter(
+                    x=chart_df['Date'],
+                    y=chart_df['Comp Value'],
+                    name=comparison_name,
+                    line=dict(color='#10b981', width=2),
+                    hovertemplate=f'{comparison_name}: ₹%{{y:,.2f}}<extra></extra>',
+                    showlegend=False  # Already in row 2 legend
+                ), row=1, col=1)
+
+        # Configure row 1 axes
+        fig.update_yaxes(title_text="Amount (₹)", row=1, col=1)
+        fig.update_yaxes(tickformat='₹,.0f', side='right', row=1, col=1)
+
+        # Add IRR annotation to row 1
+        irr_row = sip_table_df.iloc[-1]
+        total_row = sip_table_df.iloc[-2]
+
+        annotation_lines = ['<b>IRR % | Final Amount</b>']
+
+        # Fund
+        fund_irr = irr_row['Fund Value']
+        fund_final = total_row['Fund Value']
+        if pd.notna(fund_irr) and fund_irr != '':
+            annotation_lines.append(
+                f'<span style="color:#f59e0b">{fund_irr:.1f}% | ₹{fund_final:,.0f}</span>'
+            )
+
+        # Benchmark
+        benchmark_irr = irr_row['Benchmark Value']
+        benchmark_final = total_row['Benchmark Value']
+        if pd.notna(benchmark_irr) and benchmark_irr != '':
+            annotation_lines.append(
+                f'<span style="color:#6B7280">{benchmark_irr:.1f}% | ₹{benchmark_final:,.0f}</span>'
+            )
+
+        # Comparison
+        if 'Comp Value' in irr_row and comparison_name is not None:
+            comp_irr = irr_row['Comp Value']
+            comp_final = total_row['Comp Value']
+            if pd.notna(comp_irr) and comp_irr != '':
+                annotation_lines.append(
+                    f'<span style="color:#10b981">{comp_irr:.1f}% | ₹{comp_final:,.0f}</span>'
+                )
+
+        # Add annotation
+        fig.add_annotation(
+            text='<br>'.join(annotation_lines),
+            xref='x1',
+            yref='paper',
+            x=chart_df['Date'].min(),
+            y=0.98,  # Position at top of figure (top of row 1)
+            xanchor='left',
+            yanchor='top',
+            showarrow=False,
+            font=dict(size=11),
+            bgcolor='rgba(255, 255, 255, 0.9)',
+            bordercolor='#D1D5DB',
+            borderwidth=1,
+            borderpad=8,
+            align='left'
+        )
+
+    # Determine row numbers based on whether SIP is included
+    cumulative_row = 2 if sip_table_df is not None else 1
+    drawdown_row = 3 if sip_table_df is not None else 2
+    annual_row = 4 if sip_table_df is not None else 3
+
+    # === CUMULATIVE RETURNS ===
     strategy_cum = (1 + strategy_returns).cumprod() * 100
     benchmark_cum = (1 + benchmark_returns).cumprod() * 100
 
@@ -741,7 +860,7 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
             line=dict(color='#f59e0b', width=2),
             hovertemplate='₹%{y:.2f}<extra></extra>',
             showlegend=True
-        ), row=1, col=1)
+        ), row=cumulative_row, col=1)
 
         fig.add_trace(go.Scatter(
             x=benchmark_cum.index,
@@ -750,7 +869,7 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
             line=dict(color='#6B7280', width=2, dash='dash'),
             hovertemplate='₹%{y:.2f}<extra></extra>',
             showlegend=True
-        ), row=1, col=1)
+        ), row=cumulative_row, col=1)
 
         if comparison_returns is not None and comparison_name is not None:
             comparison_cum = (1 + comparison_returns).cumprod() * 100
@@ -761,9 +880,9 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
                 line=dict(color='#10b981', width=2),
                 hovertemplate='₹%{y:.2f}<extra></extra>',
                 showlegend=True
-            ), row=1, col=1)
+            ), row=cumulative_row, col=1)
 
-        fig.update_yaxes(title_text="Growth of ₹100", type="log", row=1, col=1)
+        fig.update_yaxes(title_text="Growth of ₹100", type="log", row=cumulative_row, col=1)
     else:
         # Linear scale: show growth of ₹100
         fig.add_trace(go.Scatter(
@@ -773,7 +892,7 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
             line=dict(color='#f59e0b', width=2),
             hovertemplate='₹%{y:.2f}<extra></extra>',
             showlegend=True
-        ), row=1, col=1)
+        ), row=cumulative_row, col=1)
 
         fig.add_trace(go.Scatter(
             x=benchmark_cum.index,
@@ -782,7 +901,7 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
             line=dict(color='#6B7280', width=2, dash='dash'),
             hovertemplate='₹%{y:.2f}<extra></extra>',
             showlegend=True
-        ), row=1, col=1)
+        ), row=cumulative_row, col=1)
 
         if comparison_returns is not None and comparison_name is not None:
             comparison_cum = (1 + comparison_returns).cumprod() * 100
@@ -793,11 +912,11 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
                 line=dict(color='#10b981', width=2),
                 hovertemplate='₹%{y:.2f}<extra></extra>',
                 showlegend=True
-            ), row=1, col=1)
+            ), row=cumulative_row, col=1)
 
-        fig.update_yaxes(title_text="Growth of ₹100", row=1, col=1)
+        fig.update_yaxes(title_text="Growth of ₹100", row=cumulative_row, col=1)
 
-    # === ROW 2: DRAWDOWN ===
+    # === DRAWDOWN ===
     # Calculate strategy drawdown
     strategy_cumulative = (1 + strategy_returns).cumprod()
     strategy_running_max = strategy_cumulative.expanding().max()
@@ -817,7 +936,7 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
         fillcolor='rgba(245, 158, 11, 0.3)',
         hovertemplate='%{y:.2f}%<extra></extra>',
         showlegend=False
-    ), row=2, col=1)
+    ), row=drawdown_row, col=1)
 
     fig.add_trace(go.Scatter(
         x=benchmark_drawdown.index,
@@ -828,7 +947,7 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
         fillcolor='rgba(107, 114, 128, 0.2)',
         hovertemplate='%{y:.2f}%<extra></extra>',
         showlegend=False
-    ), row=2, col=1)
+    ), row=drawdown_row, col=1)
 
     if comparison_returns is not None and comparison_name is not None:
         comparison_cumulative = (1 + comparison_returns).cumprod()
@@ -844,11 +963,11 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
             fillcolor='rgba(16, 185, 129, 0.3)',
             hovertemplate='%{y:.2f}%<extra></extra>',
             showlegend=False
-        ), row=2, col=1)
+        ), row=drawdown_row, col=1)
 
-    fig.update_yaxes(title_text="Drawdown (%)", row=2, col=1)
+    fig.update_yaxes(title_text="Drawdown (%)", row=drawdown_row, col=1)
 
-    # === ROW 3: ANNUAL RETURNS ===
+    # === ANNUAL RETURNS ===
     # Calculate annual returns
     strategy_annual = strategy_returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
     benchmark_annual = benchmark_returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
@@ -877,7 +996,7 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
             textfont=dict(size=11, color='#1F2937'),
             hovertemplate='%{y:.2f}%<extra></extra>',
             showlegend=False
-        ), row=3, col=1
+        ), row=annual_row, col=1
     )
 
     # Add benchmark bars
@@ -892,7 +1011,7 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
             textfont=dict(size=11, color='#1F2937'),
             hovertemplate='%{y:.2f}%<extra></extra>',
             showlegend=False
-        ), row=3, col=1
+        ), row=annual_row, col=1
     )
 
     # Add comparison fund bars if provided
@@ -908,15 +1027,15 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
                 textfont=dict(size=11, color='#1F2937'),
                 hovertemplate='%{y:.2f}%<extra></extra>',
                 showlegend=False
-            ), row=3, col=1
+            ), row=annual_row, col=1
         )
 
-    fig.update_xaxes(title_text="Year", row=3, col=1)
-    fig.update_yaxes(title_text="Return (%)", row=3, col=1)
+    fig.update_xaxes(title_text="Year", row=annual_row, col=1)
+    fig.update_yaxes(title_text="Return (%)", row=annual_row, col=1)
 
     # === OVERALL LAYOUT ===
     fig.update_layout(
-        height=1200,
+        height=1800 if sip_table_df is not None else 1200,
         template='plotly_white',
         hovermode='x unified',
         legend=dict(orientation="h", yanchor="top", y=1.06, xanchor="center", x=0.5),
@@ -3309,139 +3428,3 @@ def create_comparison_metrics_table(strategy_metrics, benchmark_name,
 
     df = pd.DataFrame(data)
     return df
-
-def create_sip_progression_chart(sip_table_df, strategy_name, benchmark_name, comparison_name=None):
-    """Create SIP progression chart showing portfolio values over time with IRR annotations
-
-    Args:
-        sip_table_df: DataFrame from create_sip_progression_table()
-        strategy_name: Name of main fund
-        benchmark_name: Name of benchmark
-        comparison_name: Optional name of comparison fund
-
-    Returns:
-        Plotly figure
-    """
-    # Remove footer rows (TOTAL and IRR)
-    chart_df = sip_table_df.iloc[:-2].copy()
-
-    # Convert Period to datetime for proper x-axis
-    chart_df['Date'] = pd.to_datetime(chart_df['Period'] + '-01')
-
-    # Create figure
-    fig = go.Figure()
-
-    # Add invested amount line (reference line, dashed)
-    fig.add_trace(go.Scatter(
-        x=chart_df['Date'],
-        y=chart_df['Invested'],
-        name='Amount Invested',
-        line=dict(color='#9CA3AF', width=2, dash='dash'),
-        hovertemplate='Invested: ₹%{y:,.2f}<extra></extra>'
-    ))
-
-    # Add fund value line
-    fig.add_trace(go.Scatter(
-        x=chart_df['Date'],
-        y=chart_df['Fund Value'],
-        name=strategy_name,
-        line=dict(color='#f59e0b', width=3),
-        hovertemplate=f'{strategy_name}: ₹%{{y:,.2f}}<extra></extra>'
-    ))
-
-    # Add benchmark value line
-    fig.add_trace(go.Scatter(
-        x=chart_df['Date'],
-        y=chart_df['Benchmark Value'],
-        name=benchmark_name,
-        line=dict(color='#6B7280', width=3),
-        hovertemplate=f'{benchmark_name}: ₹%{{y:,.2f}}<extra></extra>'
-    ))
-
-    # Add comparison value line if present
-    if 'Comp Value' in chart_df.columns and comparison_name:
-        fig.add_trace(go.Scatter(
-            x=chart_df['Date'],
-            y=chart_df['Comp Value'],
-            name=comparison_name,
-            line=dict(color='#10b981', width=3),
-            hovertemplate=f'{comparison_name}: ₹%{{y:,.2f}}<extra></extra>'
-        ))
-
-    # Extract IRR and final values from table
-    irr_row = sip_table_df.iloc[-1]
-    total_row = sip_table_df.iloc[-2]
-
-    # Build single annotation text with all IRRs and final amounts
-    annotation_lines = ['<b>IRR % | Final Amount</b>']
-
-    # Fund
-    fund_irr = irr_row['Fund Value']
-    fund_final = total_row['Fund Value']
-    if pd.notna(fund_irr) and fund_irr != '':
-        annotation_lines.append(
-            f'<span style="color:#f59e0b">{fund_irr:.1f}% | ₹{fund_final:,.0f}</span>'
-        )
-
-    # Benchmark
-    benchmark_irr = irr_row['Benchmark Value']
-    benchmark_final = total_row['Benchmark Value']
-    if pd.notna(benchmark_irr) and benchmark_irr != '':
-        annotation_lines.append(
-            f'<span style="color:#6B7280">{benchmark_irr:.1f}% | ₹{benchmark_final:,.0f}</span>'
-        )
-
-    # Comparison
-    if 'Comp Value' in irr_row and comparison_name:
-        comp_irr = irr_row['Comp Value']
-        comp_final = total_row['Comp Value']
-        if pd.notna(comp_irr) and comp_irr != '':
-            annotation_lines.append(
-                f'<span style="color:#10b981">{comp_irr:.1f}% | ₹{comp_final:,.0f}</span>'
-            )
-
-    # Create single annotation box (left aligned)
-    annotation_text = '<br>'.join(annotation_lines)
-    annotations = [
-        dict(
-            x=0.02, y=0.98,
-            xref='paper', yref='paper',
-            text=annotation_text,
-            showarrow=False,
-            xanchor='left',
-            yanchor='top',
-            font=dict(size=11),
-            bgcolor='rgba(255, 255, 255, 0.9)',
-            bordercolor='#D1D5DB',
-            borderwidth=1,
-            borderpad=8,
-            align='left'
-        )
-    ]
-
-    # Update layout
-    fig.update_layout(
-        title="SIP Portfolio Growth (₹100/month)",
-        xaxis_title="Date",
-        yaxis_title="Amount (₹)",
-        template='plotly_white',
-        hovermode='x unified',
-        height=500,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="center",
-            x=0.5
-        ),
-        annotations=annotations,
-        margin=dict(t=120, b=80, l=80, r=80)
-    )
-
-    # Format y-axis as currency
-    fig.update_yaxes(
-        tickformat='₹,.0f',
-        side='right'
-    )
-
-    return fig
