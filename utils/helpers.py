@@ -83,19 +83,43 @@ def create_metrics_comparison_df(strategy_metrics, benchmark_metrics, strategy_n
                 'Benchmark': format_metric_value(metric_name, benchmark_metrics.get(metric_name, 0))
             })
 
-    # Add benchmark-relative metrics (Beta, Correlation, R²)
-    benchmark_relative_metrics = ['Beta', 'Correlation', 'R²']
-    has_benchmark_metrics = any(m in strategy_metrics for m in benchmark_relative_metrics)
+    return pd.DataFrame(metrics_data)
 
-    if has_benchmark_metrics:
-        metrics_data.append({'Metric': '── BENCHMARK RELATIVE ──', 'Strategy': '', 'Benchmark': ''})
-        for metric_name in benchmark_relative_metrics:
-            if metric_name in strategy_metrics:
-                metrics_data.append({
-                    'Metric': metric_name,
-                    'Strategy': format_metric_value(metric_name, strategy_metrics[metric_name]),
-                    'Benchmark': ''  # Leave blank for benchmark column
-                })
+def create_metric_category_df(strategy_metrics, benchmark_metrics, metric_names,
+                              strategy_display=None, benchmark_display=None,
+                              comparison_metrics=None, comparison_display=None):
+    """
+    Create a formatted dataframe for a specific category of metrics
+
+    Args:
+        strategy_metrics: Dict of all strategy metrics
+        benchmark_metrics: Dict of all benchmark metrics
+        metric_names: List of metric names to include in this category
+        strategy_display: Optional display name for strategy (used in helper text, not column header)
+        benchmark_display: Optional display name for benchmark (used in helper text, not column header)
+        comparison_metrics: Optional dict of comparison fund metrics
+        comparison_display: Optional display name for comparison (used in helper text, not column header)
+
+    Returns:
+        DataFrame with columns: Metric | Main Fund | Benchmark [| Comp Fund]
+    """
+    metrics_data = []
+
+    for metric_name in metric_names:
+        if metric_name in strategy_metrics:
+            row_data = {
+                'Metric': metric_name,
+                'Main Fund': format_metric_value(metric_name, strategy_metrics[metric_name]),
+                'Benchmark': format_metric_value(metric_name, benchmark_metrics.get(metric_name, 0))
+            }
+
+            # Add comparison column if provided
+            if comparison_metrics is not None and comparison_display is not None:
+                row_data['Comp Fund'] = format_metric_value(
+                    metric_name, comparison_metrics.get(metric_name, 0)
+                )
+
+            metrics_data.append(row_data)
 
     return pd.DataFrame(metrics_data)
 
@@ -242,3 +266,61 @@ def calculate_fund_metrics_table(df, risk_free_rate=0.0249, start_date=None, end
     ]
 
     return fund_metrics_df, category_metrics
+
+
+def highlight_outliers_in_monthly_table(monthly_table_df):
+    """Apply highlighting to outlier cells (2 std dev away from mean)
+
+    Args:
+        monthly_table_df: DataFrame with monthly returns (Year column + month columns)
+
+    Returns:
+        Styled DataFrame with outliers highlighted
+    """
+    import pandas as pd
+    import numpy as np
+
+    # Get month columns (exclude 'Year' and 'YTD')
+    month_cols = [col for col in monthly_table_df.columns if col not in ['Year', 'YTD']]
+
+    # Calculate statistics across all monthly returns (excluding YTD)
+    all_returns = monthly_table_df[month_cols].values.flatten()
+    all_returns = all_returns[~np.isnan(all_returns)]  # Remove NaN values
+
+    mean_return = np.mean(all_returns)
+    std_return = np.std(all_returns)
+
+    # Define thresholds
+    upper_threshold = mean_return + 2 * std_return
+    lower_threshold = mean_return - 2 * std_return
+
+    def highlight_cell(val):
+        """Return background color for outlier cells"""
+        if pd.isna(val):
+            return ''
+
+        if val > upper_threshold:
+            return 'background-color: #d4edda; font-weight: bold'  # Light green for positive outliers
+        elif val < lower_threshold:
+            return 'background-color: #f8d7da; font-weight: bold'  # Light red for negative outliers
+        else:
+            return ''
+
+    # Apply styling to monthly columns only (not YTD)
+    styled_df = monthly_table_df.style.applymap(
+        highlight_cell,
+        subset=month_cols
+    )
+
+    # Make YTD column bold (if it exists)
+    if 'YTD' in monthly_table_df.columns:
+        styled_df = styled_df.applymap(
+            lambda val: 'font-weight: bold',
+            subset=['YTD']
+        )
+
+    # Format all numeric columns (including YTD)
+    all_numeric_cols = [col for col in monthly_table_df.columns if col != 'Year']
+    styled_df = styled_df.format({col: '{:.2f}' for col in all_numeric_cols})
+
+    return styled_df

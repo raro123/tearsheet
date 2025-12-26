@@ -150,6 +150,29 @@ def calculate_beta_correlation(returns, benchmark_returns):
 
     return beta, correlation, r_squared
 
+def calculate_alpha(fund_cagr, benchmark_cagr, beta, risk_free_rate=0.0249):
+    """Calculate Jensen's Alpha (annualized excess return above CAPM prediction)
+
+    Alpha = Fund CAGR - [Risk-free rate + Beta × (Benchmark CAGR - Risk-free rate)]
+
+    Args:
+        fund_cagr: Fund's CAGR (annualized return)
+        benchmark_cagr: Benchmark's CAGR (annualized return)
+        beta: Fund's beta relative to benchmark
+        risk_free_rate: Annual risk-free rate
+
+    Returns:
+        Annualized alpha
+    """
+    if fund_cagr is None or benchmark_cagr is None or beta is None:
+        return None
+
+    # Jensen's Alpha formula using CAPM
+    expected_return = risk_free_rate + beta * (benchmark_cagr - risk_free_rate)
+    alpha = fund_cagr - expected_return
+
+    return alpha
+
 def calculate_all_metrics(returns, benchmark_returns=None, risk_free_rate=0.0249):
     """Calculate all performance metrics organized by category"""
     max_wins, max_losses = calculate_consecutive_streaks(returns)
@@ -199,5 +222,12 @@ def calculate_all_metrics(returns, benchmark_returns=None, risk_free_rate=0.0249
             metrics['Beta'] = beta
             metrics['Correlation'] = correlation
             metrics['R²'] = r_squared
+
+            # Calculate Alpha using CAGR values
+            fund_cagr = metrics['CAGR']
+            benchmark_cagr = calculate_cagr(benchmark_returns)
+            alpha = calculate_alpha(fund_cagr, benchmark_cagr, beta, risk_free_rate)
+            if alpha is not None:
+                metrics['Alpha'] = alpha
 
     return metrics
