@@ -24,7 +24,8 @@ from src.visualizations import (
     create_monthly_returns_table,
     create_monthly_returns_scatter,
     create_comparison_metrics_table,
-    create_performance_overview_subplot
+    create_performance_overview_subplot,
+    create_rolling_analysis_subplot
 )
 from utils.helpers import create_metrics_comparison_df, get_period_description, create_metric_category_df, highlight_outliers_in_monthly_table
 from src.shared_components import filter_funds_by_plan_type
@@ -523,20 +524,37 @@ def render(data_loader):
     # === SECTION 2C: ADDITIONAL CHARTS ===
     st.markdown("---")
 
-    # Rolling Returns
-    rolling_period = st.selectbox(
+    # === SECTION 2C: ROLLING ANALYSIS ===
+    st.caption("📊 **Rolling Analysis** | Multi-metric performance tracking over time")
+
+    # Period selection only
+    rolling_period_option = st.radio(
         "Rolling Period",
-        options=[("1 Year", 252), ("3 Years", 756), ("5 Years", 1260)],
-        format_func=lambda x: x[0],
-        index=0,
-        key="fd_rolling_period"
+        options=["6 months", "1 year", "3 years", "5 years"],
+        index=1,  # Default: 1 year
+        horizontal=True,
+        key="fd_rolling_period_radio"
     )
 
+    # Map selections to parameters
+    period_mapping = {
+        "6 months": {"days": 126, "span": 63, "label": "6 Months"},
+        "1 year": {"days": 252, "span": 126, "label": "1 Year"},
+        "3 years": {"days": 756, "span": 378, "label": "3 Years"},
+        "5 years": {"days": 1260, "span": 630, "label": "5 Years"}
+    }
+
+    period_config = period_mapping[rolling_period_option]
+
+    # Display subplot (always use simple rolling)
     st.plotly_chart(
-        create_rolling_returns_chart(
+        create_rolling_analysis_subplot(
             strategy_returns, benchmark_returns,
             strategy_name, benchmark_name,
-            window=rolling_period[1],
+            window=period_config["days"],
+            ewm_span=period_config["span"],
+            use_ewm=False,  # Always use simple rolling
+            period_label=period_config["label"],
             comparison_returns=comparison_returns,
             comparison_name=comparison_name
         ),

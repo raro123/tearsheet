@@ -372,6 +372,256 @@ def create_rolling_returns_chart(strategy_returns, benchmark_returns, strategy_n
 
     return fig
 
+def create_rolling_analysis_subplot(strategy_returns, benchmark_returns, strategy_name, benchmark_name,
+                                    window=252, ewm_span=126, use_ewm=False, period_label="1 Year",
+                                    comparison_returns=None, comparison_name=None):
+    """Create 2x2 subplot with rolling metrics: Returns, Volatility, Beta, Correlation
+
+    Args:
+        strategy_returns: Series with strategy daily returns
+        benchmark_returns: Series with benchmark daily returns
+        strategy_name: String name of strategy fund
+        benchmark_name: String name of benchmark
+        window: Rolling window size in trading days (for simple rolling)
+        ewm_span: Span parameter for exponential weighted (for EWM method)
+        use_ewm: Boolean, if True uses exponential weighted, else simple rolling
+        period_label: String label for the period (e.g., "1 Year", "3 Years")
+        comparison_returns: Optional Series with comparison fund returns
+        comparison_name: Optional String name of comparison fund
+
+    Returns:
+        Plotly figure with 2x2 subplots
+    """
+    import numpy as np
+    TRADING_DAYS = 252
+
+    # Align returns for beta and correlation calculations
+    aligned_strategy, aligned_benchmark = strategy_returns.align(benchmark_returns, join='inner')
+
+    # Create 2x2 subplot
+    fig = make_subplots(
+        rows=2, cols=2,
+        row_heights=[0.5, 0.5],
+        horizontal_spacing=0.1,
+        vertical_spacing=0.1,
+        subplot_titles=(
+            f"Rolling Returns ({period_label})",
+            f"Rolling Volatility ({period_label})",
+            f"Rolling Beta ({period_label})",
+            f"Rolling Correlation ({period_label})"
+        )
+    )
+
+    # === CHART 1: ROLLING RETURNS (Row 1, Col 1) ===
+    if use_ewm:
+        strategy_rolling_returns = aligned_strategy.ewm(span=ewm_span, min_periods=window).mean() * TRADING_DAYS * 100
+        benchmark_rolling_returns = aligned_benchmark.ewm(span=ewm_span, min_periods=window).mean() * TRADING_DAYS * 100
+    else:
+        strategy_rolling_returns = aligned_strategy.rolling(window).apply(
+            lambda x: (1 + x).prod() - 1
+        ) * (TRADING_DAYS / window) * 100
+        benchmark_rolling_returns = aligned_benchmark.rolling(window).apply(
+            lambda x: (1 + x).prod() - 1
+        ) * (TRADING_DAYS / window) * 100
+
+    # Add strategy returns
+    fig.add_trace(go.Scatter(
+        x=strategy_rolling_returns.dropna().index,
+        y=strategy_rolling_returns.dropna(),
+        name=strategy_name,
+        line=dict(color='#f59e0b', width=2),
+        hovertemplate='%{y:.2f}%<extra></extra>',
+        showlegend=True
+    ), row=1, col=1)
+
+    # Add benchmark returns
+    fig.add_trace(go.Scatter(
+        x=benchmark_rolling_returns.dropna().index,
+        y=benchmark_rolling_returns.dropna(),
+        name=benchmark_name,
+        line=dict(color='#6B7280', width=2, dash='dash'),
+        hovertemplate='%{y:.2f}%<extra></extra>',
+        showlegend=True
+    ), row=1, col=1)
+
+    # Add comparison returns if provided
+    if comparison_returns is not None and comparison_name is not None:
+        aligned_comparison, _ = comparison_returns.align(benchmark_returns, join='inner')
+        if use_ewm:
+            comparison_rolling_returns = aligned_comparison.ewm(span=ewm_span, min_periods=window).mean() * TRADING_DAYS * 100
+        else:
+            comparison_rolling_returns = aligned_comparison.rolling(window).apply(
+                lambda x: (1 + x).prod() - 1
+            ) * (TRADING_DAYS / window) * 100
+
+        fig.add_trace(go.Scatter(
+            x=comparison_rolling_returns.dropna().index,
+            y=comparison_rolling_returns.dropna(),
+            name=comparison_name,
+            line=dict(color='#10b981', width=2),
+            hovertemplate='%{y:.2f}%<extra></extra>',
+            showlegend=True
+        ), row=1, col=1)
+
+    fig.update_yaxes(title_text="Annualized Return (%)", row=1, col=1)
+
+    # === CHART 2: ROLLING VOLATILITY (Row 1, Col 2) ===
+    if use_ewm:
+        strategy_rolling_vol = aligned_strategy.ewm(span=ewm_span, min_periods=window).std() * np.sqrt(TRADING_DAYS) * 100
+        benchmark_rolling_vol = aligned_benchmark.ewm(span=ewm_span, min_periods=window).std() * np.sqrt(TRADING_DAYS) * 100
+    else:
+        strategy_rolling_vol = aligned_strategy.rolling(window).std() * np.sqrt(TRADING_DAYS) * 100
+        benchmark_rolling_vol = aligned_benchmark.rolling(window).std() * np.sqrt(TRADING_DAYS) * 100
+
+    # Add strategy volatility
+    fig.add_trace(go.Scatter(
+        x=strategy_rolling_vol.dropna().index,
+        y=strategy_rolling_vol.dropna(),
+        name=strategy_name,
+        line=dict(color='#f59e0b', width=2),
+        hovertemplate='%{y:.2f}%<extra></extra>',
+        showlegend=False
+    ), row=1, col=2)
+
+    # Add benchmark volatility
+    fig.add_trace(go.Scatter(
+        x=benchmark_rolling_vol.dropna().index,
+        y=benchmark_rolling_vol.dropna(),
+        name=benchmark_name,
+        line=dict(color='#6B7280', width=2, dash='dash'),
+        hovertemplate='%{y:.2f}%<extra></extra>',
+        showlegend=False
+    ), row=1, col=2)
+
+    # Add comparison volatility if provided
+    if comparison_returns is not None and comparison_name is not None:
+        if use_ewm:
+            comparison_rolling_vol = aligned_comparison.ewm(span=ewm_span, min_periods=window).std() * np.sqrt(TRADING_DAYS) * 100
+        else:
+            comparison_rolling_vol = aligned_comparison.rolling(window).std() * np.sqrt(TRADING_DAYS) * 100
+
+        fig.add_trace(go.Scatter(
+            x=comparison_rolling_vol.dropna().index,
+            y=comparison_rolling_vol.dropna(),
+            name=comparison_name,
+            line=dict(color='#10b981', width=2),
+            hovertemplate='%{y:.2f}%<extra></extra>',
+            showlegend=False
+        ), row=1, col=2)
+
+    fig.update_yaxes(title_text="Annualized Volatility (%)", row=1, col=2)
+
+    # === CHART 3: ROLLING BETA (Row 2, Col 1) ===
+    if use_ewm:
+        strategy_rolling_cov = aligned_strategy.ewm(span=ewm_span, min_periods=window).cov(aligned_benchmark)
+        benchmark_rolling_var = aligned_benchmark.ewm(span=ewm_span, min_periods=window).var()
+        strategy_rolling_beta = strategy_rolling_cov / benchmark_rolling_var
+    else:
+        strategy_rolling_cov = aligned_strategy.rolling(window).cov(aligned_benchmark)
+        benchmark_rolling_var = aligned_benchmark.rolling(window).var()
+        strategy_rolling_beta = strategy_rolling_cov / benchmark_rolling_var
+
+    # Add strategy beta
+    fig.add_trace(go.Scatter(
+        x=strategy_rolling_beta.dropna().index,
+        y=strategy_rolling_beta.dropna(),
+        name=strategy_name,
+        line=dict(color='#f59e0b', width=2),
+        hovertemplate='%{y:.2f}<extra></extra>',
+        showlegend=False
+    ), row=2, col=1)
+
+    # Add comparison beta if provided
+    if comparison_returns is not None and comparison_name is not None:
+        if use_ewm:
+            comparison_rolling_cov = aligned_comparison.ewm(span=ewm_span, min_periods=window).cov(aligned_benchmark)
+            comparison_rolling_beta = comparison_rolling_cov / benchmark_rolling_var
+        else:
+            comparison_rolling_cov = aligned_comparison.rolling(window).cov(aligned_benchmark)
+            comparison_rolling_beta = comparison_rolling_cov / benchmark_rolling_var
+
+        fig.add_trace(go.Scatter(
+            x=comparison_rolling_beta.dropna().index,
+            y=comparison_rolling_beta.dropna(),
+            name=comparison_name,
+            line=dict(color='#10b981', width=2),
+            hovertemplate='%{y:.2f}<extra></extra>',
+            showlegend=False
+        ), row=2, col=1)
+
+    # Add reference line at Beta = 1.0
+    fig.add_hline(y=1.0, line_dash="dot", line_color="gray", opacity=0.5, row=2, col=1)
+
+    fig.update_yaxes(title_text="Beta", row=2, col=1)
+
+    # === CHART 4: ROLLING CORRELATION (Row 2, Col 2) ===
+    if use_ewm:
+        strategy_rolling_corr = aligned_strategy.ewm(span=ewm_span, min_periods=window).corr(aligned_benchmark)
+    else:
+        strategy_rolling_corr = aligned_strategy.rolling(window).corr(aligned_benchmark)
+
+    # Add strategy correlation
+    fig.add_trace(go.Scatter(
+        x=strategy_rolling_corr.dropna().index,
+        y=strategy_rolling_corr.dropna(),
+        name=strategy_name,
+        line=dict(color='#f59e0b', width=2),
+        hovertemplate='%{y:.3f}<extra></extra>',
+        showlegend=False
+    ), row=2, col=2)
+
+    # Add comparison correlation if provided
+    if comparison_returns is not None and comparison_name is not None:
+        if use_ewm:
+            comparison_rolling_corr = aligned_comparison.ewm(span=ewm_span, min_periods=window).corr(aligned_benchmark)
+        else:
+            comparison_rolling_corr = aligned_comparison.rolling(window).corr(aligned_benchmark)
+
+        fig.add_trace(go.Scatter(
+            x=comparison_rolling_corr.dropna().index,
+            y=comparison_rolling_corr.dropna(),
+            name=comparison_name,
+            line=dict(color='#10b981', width=2),
+            hovertemplate='%{y:.3f}<extra></extra>',
+            showlegend=False
+        ), row=2, col=2)
+
+        # Add strategy vs comparison fund correlation
+        if use_ewm:
+            strategy_comp_corr = aligned_strategy.ewm(span=ewm_span, min_periods=window).corr(aligned_comparison)
+        else:
+            strategy_comp_corr = aligned_strategy.rolling(window).corr(aligned_comparison)
+
+        fig.add_trace(go.Scatter(
+            x=strategy_comp_corr.dropna().index,
+            y=strategy_comp_corr.dropna(),
+            name=f"{strategy_name} vs {comparison_name}",
+            line=dict(color='#8b5cf6', width=2, dash='dot'),
+            hovertemplate='%{y:.3f}<extra></extra>',
+            showlegend=True
+        ), row=2, col=2)
+
+    # Add reference lines at -1, 0, 1
+    fig.add_hline(y=1.0, line_dash="dot", line_color="gray", opacity=0.5, row=2, col=2)
+    fig.add_hline(y=0.0, line_dash="dot", line_color="gray", opacity=0.5, row=2, col=2)
+    fig.add_hline(y=-1.0, line_dash="dot", line_color="gray", opacity=0.5, row=2, col=2)
+
+    fig.update_yaxes(title_text="Correlation", range=[-1, 1], row=2, col=2)
+
+    # === OVERALL LAYOUT ===
+    fig.update_layout(
+        height=900,
+        template='plotly_white',
+        hovermode='x unified',
+        legend=dict(orientation="h", yanchor="bottom", y=-0.12, xanchor="center", x=0.5),
+        margin=dict(t=80, b=100, l=60, r=60)
+    )
+
+    # Update all y-axes to be on right side
+    fig.update_yaxes(side='right')
+
+    return fig
+
 def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name,
                                 comparison_returns=None, comparison_name=None):
     """Create annual returns bar chart with data labels"""
@@ -479,17 +729,17 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
     )
 
     # === ROW 1: CUMULATIVE RETURNS ===
-    strategy_cum = (1 + strategy_returns).cumprod()
-    benchmark_cum = (1 + benchmark_returns).cumprod()
+    strategy_cum = (1 + strategy_returns).cumprod() * 100
+    benchmark_cum = (1 + benchmark_returns).cumprod() * 100
 
     if log_scale:
-        # Log scale: show as growth multiplier
+        # Log scale: show growth of ₹100
         fig.add_trace(go.Scatter(
             x=strategy_cum.index,
             y=strategy_cum,
             name=strategy_name,
             line=dict(color='#f59e0b', width=2),
-            hovertemplate='%{y:.2f}x<extra></extra>',
+            hovertemplate='₹%{y:.2f}<extra></extra>',
             showlegend=True
         ), row=1, col=1)
 
@@ -498,54 +748,54 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
             y=benchmark_cum,
             name=benchmark_name,
             line=dict(color='#6B7280', width=2, dash='dash'),
-            hovertemplate='%{y:.2f}x<extra></extra>',
+            hovertemplate='₹%{y:.2f}<extra></extra>',
             showlegend=True
         ), row=1, col=1)
 
         if comparison_returns is not None and comparison_name is not None:
-            comparison_cum = (1 + comparison_returns).cumprod()
+            comparison_cum = (1 + comparison_returns).cumprod() * 100
             fig.add_trace(go.Scatter(
                 x=comparison_cum.index,
                 y=comparison_cum,
                 name=comparison_name,
                 line=dict(color='#10b981', width=2),
-                hovertemplate='%{y:.2f}x<extra></extra>',
+                hovertemplate='₹%{y:.2f}<extra></extra>',
                 showlegend=True
             ), row=1, col=1)
 
-        fig.update_yaxes(title_text="Growth of $1", type="log", row=1, col=1)
+        fig.update_yaxes(title_text="Growth of ₹100", type="log", row=1, col=1)
     else:
-        # Linear scale: show as percentage
+        # Linear scale: show growth of ₹100
         fig.add_trace(go.Scatter(
             x=strategy_cum.index,
-            y=(strategy_cum - 1) * 100,
+            y=strategy_cum,
             name=strategy_name,
             line=dict(color='#f59e0b', width=2),
-            hovertemplate='%{y:.2f}%<extra></extra>',
+            hovertemplate='₹%{y:.2f}<extra></extra>',
             showlegend=True
         ), row=1, col=1)
 
         fig.add_trace(go.Scatter(
             x=benchmark_cum.index,
-            y=(benchmark_cum - 1) * 100,
+            y=benchmark_cum,
             name=benchmark_name,
             line=dict(color='#6B7280', width=2, dash='dash'),
-            hovertemplate='%{y:.2f}%<extra></extra>',
+            hovertemplate='₹%{y:.2f}<extra></extra>',
             showlegend=True
         ), row=1, col=1)
 
         if comparison_returns is not None and comparison_name is not None:
-            comparison_cum = (1 + comparison_returns).cumprod()
+            comparison_cum = (1 + comparison_returns).cumprod() * 100
             fig.add_trace(go.Scatter(
                 x=comparison_cum.index,
-                y=(comparison_cum - 1) * 100,
+                y=comparison_cum,
                 name=comparison_name,
                 line=dict(color='#10b981', width=2),
-                hovertemplate='%{y:.2f}%<extra></extra>',
+                hovertemplate='₹%{y:.2f}<extra></extra>',
                 showlegend=True
             ), row=1, col=1)
 
-        fig.update_yaxes(title_text="Cumulative Return (%)", row=1, col=1)
+        fig.update_yaxes(title_text="Growth of ₹100", row=1, col=1)
 
     # === ROW 2: DRAWDOWN ===
     # Calculate strategy drawdown
@@ -669,7 +919,7 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
         height=1200,
         template='plotly_white',
         hovermode='x unified',
-        legend=dict(orientation="h", yanchor="top", y=1.04, xanchor="left", x=0),
+        legend=dict(orientation="h", yanchor="top", y=1.06, xanchor="center", x=0.5),
         margin=dict(t=80, b=80, l=60, r=60),
         barmode='group'
     )
