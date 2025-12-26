@@ -4,7 +4,8 @@ import numpy as np
 from plotly.subplots import make_subplots
 from scipy import stats
 
-def create_cumulative_returns_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name):
+def create_cumulative_returns_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name,
+                                    comparison_returns=None, comparison_name=None):
     """Create cumulative returns comparison chart"""
     strategy_cum = (1 + strategy_returns).cumprod()
     benchmark_cum = (1 + benchmark_returns).cumprod()
@@ -21,14 +22,26 @@ def create_cumulative_returns_chart(strategy_returns, benchmark_returns, strateg
         x=benchmark_cum.index,
         y=(benchmark_cum - 1) * 100,
         name=benchmark_name,
-        line=dict(color='#3b82f6', width=2),
+        line=dict(color='#6B7280', width=2, dash='dash'),
         hovertemplate='%{y:.2f}%<extra></extra>'
     ))
+
+    # Add comparison fund if provided
+    if comparison_returns is not None and comparison_name is not None:
+        comparison_cum = (1 + comparison_returns).cumprod()
+        fig.add_trace(go.Scatter(
+            x=comparison_cum.index,
+            y=(comparison_cum - 1) * 100,
+            name=comparison_name,
+            line=dict(color='#10b981', width=2),
+            hovertemplate='%{y:.2f}%<extra></extra>'
+        ))
 
     fig.update_layout(
         title=dict(text="Cumulative Returns vs Benchmark", font=dict(size=18, weight='bold')),
         xaxis_title="Date",
         yaxis_title="Cumulative Return (%)",
+        yaxis=dict(side='right'),
         hovermode='x unified',
         height=450,
         template='plotly_white',
@@ -59,6 +72,7 @@ def create_drawdown_chart(returns, name):
         title=f"Drawdown - {name}",
         xaxis_title="Date",
         yaxis_title="Drawdown (%)",
+        yaxis=dict(side='right'),
         hovermode='x unified',
         height=300,
         template='plotly_white'
@@ -66,7 +80,8 @@ def create_drawdown_chart(returns, name):
 
     return fig
 
-def create_drawdown_comparison_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name):
+def create_drawdown_comparison_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name,
+                                     comparison_returns=None, comparison_name=None):
     """Create drawdown comparison chart for strategy vs benchmark"""
     # Calculate strategy drawdown
     strategy_cumulative = (1 + strategy_returns).cumprod()
@@ -97,15 +112,32 @@ def create_drawdown_comparison_chart(strategy_returns, benchmark_returns, strate
         y=benchmark_drawdown,
         name=benchmark_name,
         fill='tozeroy',
-        line=dict(color='#3b82f6', width=2),
-        fillcolor='rgba(59, 130, 246, 0.3)',
+        line=dict(color='#6B7280', width=2, dash='dash'),
+        fillcolor='rgba(107, 114, 128, 0.2)',
         hovertemplate='%{y:.2f}%<extra></extra>'
     ))
+
+    # Add comparison fund drawdown if provided
+    if comparison_returns is not None and comparison_name is not None:
+        comparison_cumulative = (1 + comparison_returns).cumprod()
+        comparison_running_max = comparison_cumulative.expanding().max()
+        comparison_drawdown = (comparison_cumulative - comparison_running_max) / comparison_running_max * 100
+
+        fig.add_trace(go.Scatter(
+            x=comparison_drawdown.index,
+            y=comparison_drawdown,
+            name=comparison_name,
+            fill='tozeroy',
+            line=dict(color='#10b981', width=2),
+            fillcolor='rgba(16, 185, 129, 0.3)',
+            hovertemplate='%{y:.2f}%<extra></extra>'
+        ))
 
     fig.update_layout(
         title=dict(text="Drawdown Comparison", font=dict(size=18, weight='bold')),
         xaxis_title="Date",
         yaxis_title="Drawdown (%)",
+        yaxis=dict(side='right'),
         hovermode='x unified',
         height=450,
         template='plotly_white',
@@ -213,7 +245,7 @@ def create_rolling_sharpe_chart(returns, benchmark_returns, strategy_name, bench
         x=bench_rolling_sharpe.index,
         y=bench_rolling_sharpe,
         name=benchmark_name,
-        line=dict(color='#3b82f6', width=2),
+        line=dict(color='#6B7280', width=2, dash='dash'),
         hovertemplate='%{y:.2f}<extra></extra>'
     ))
 
@@ -221,6 +253,7 @@ def create_rolling_sharpe_chart(returns, benchmark_returns, strategy_name, bench
         title=f"Rolling Sharpe Ratio ({window} days)",
         xaxis_title="Date",
         yaxis_title="Sharpe Ratio",
+        yaxis=dict(side='right'),
         hovermode='x unified',
         height=300,
         template='plotly_white',
@@ -229,7 +262,8 @@ def create_rolling_sharpe_chart(returns, benchmark_returns, strategy_name, bench
 
     return fig
 
-def create_log_returns_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name):
+def create_log_returns_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name,
+                             comparison_returns=None, comparison_name=None):
     """Create log-scaled cumulative returns chart"""
     strategy_cum = (1 + strategy_returns).cumprod()
     benchmark_cum = (1 + benchmark_returns).cumprod()
@@ -246,15 +280,26 @@ def create_log_returns_chart(strategy_returns, benchmark_returns, strategy_name,
         x=benchmark_cum.index,
         y=benchmark_cum,
         name=benchmark_name,
-        line=dict(color='#3b82f6', width=2),
+        line=dict(color='#6B7280', width=2, dash='dash'),
         hovertemplate='%{y:.2f}<extra></extra>'
     ))
+
+    # Add comparison fund if provided
+    if comparison_returns is not None and comparison_name is not None:
+        comparison_cum = (1 + comparison_returns).cumprod()
+        fig.add_trace(go.Scatter(
+            x=comparison_cum.index,
+            y=comparison_cum,
+            name=comparison_name,
+            line=dict(color='#10b981', width=2),
+            hovertemplate='%{y:.2f}<extra></extra>'
+        ))
 
     fig.update_layout(
         title=dict(text="Cumulative Returns (Log Scale)", font=dict(size=18, weight='bold')),
         xaxis_title="Date",
         yaxis_title="Growth of $1",
-        yaxis_type="log",
+        yaxis=dict(type="log", side='right'),
         hovermode='x unified',
         height=450,
         template='plotly_white',
@@ -264,7 +309,8 @@ def create_log_returns_chart(strategy_returns, benchmark_returns, strategy_name,
 
     return fig
 
-def create_rolling_returns_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name, window=252):
+def create_rolling_returns_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name, window=252,
+                                 comparison_returns=None, comparison_name=None):
     """Create rolling returns comparison chart"""
     TRADING_DAYS = 252
 
@@ -288,9 +334,20 @@ def create_rolling_returns_chart(strategy_returns, benchmark_returns, strategy_n
         x=benchmark_rolling.index,
         y=benchmark_rolling,
         name=benchmark_name,
-        line=dict(color='#3b82f6', width=2),
+        line=dict(color='#6B7280', width=2, dash='dash'),
         hovertemplate='%{y:.2f}%<extra></extra>'
     ))
+
+    # Add comparison fund rolling returns if provided
+    if comparison_returns is not None and comparison_name is not None:
+        comparison_rolling = comparison_returns.rolling(window).apply(lambda x: (1 + x).prod() - 1) * (TRADING_DAYS / window) * 100
+        fig.add_trace(go.Scatter(
+            x=comparison_rolling.index,
+            y=comparison_rolling,
+            name=comparison_name,
+            line=dict(color='#10b981', width=2),
+            hovertemplate='%{y:.2f}%<extra></extra>'
+        ))
 
     # Determine period label
     period_label = f"{window} days"
@@ -305,6 +362,7 @@ def create_rolling_returns_chart(strategy_returns, benchmark_returns, strategy_n
         title=dict(text=f"Rolling Returns ({period_label}, Annualized)", font=dict(size=18, weight='bold')),
         xaxis_title="Date",
         yaxis_title="Annualized Return (%)",
+        yaxis=dict(side='right'),
         hovermode='x unified',
         height=450,
         template='plotly_white',
@@ -314,7 +372,8 @@ def create_rolling_returns_chart(strategy_returns, benchmark_returns, strategy_n
 
     return fig
 
-def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name):
+def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name,
+                                comparison_returns=None, comparison_name=None):
     """Create annual returns bar chart with data labels"""
 
     # Calculate annual returns
@@ -323,6 +382,12 @@ def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_na
 
     # Align both series to ensure they have the same years
     strategy_annual, benchmark_annual = strategy_annual.align(benchmark_annual, join='outer', fill_value=0)
+
+    # If comparison fund is provided, add it to alignment
+    if comparison_returns is not None:
+        comparison_annual = comparison_returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+        strategy_annual, comparison_annual = strategy_annual.align(comparison_annual, join='outer', fill_value=0)
+        benchmark_annual, comparison_annual = benchmark_annual.align(comparison_annual, join='outer', fill_value=0)
 
     # Extract years
     years = strategy_annual.index.year
@@ -335,9 +400,10 @@ def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_na
             x=years,
             y=strategy_annual.values,
             name=strategy_name,
-            marker_color='#f59e0b',
-            text=[f"{v:.1f}%" for v in strategy_annual.values],
+            marker=dict(color='rgba(245, 158, 11, 0.8)', line=dict(width=0)),
+            text=[f"{v:.0f}%" for v in strategy_annual.values],
             textposition='outside',
+            textfont=dict(size=14, color='#1F2937'),
             hovertemplate='%{y:.2f}%<extra></extra>'
         )
     )
@@ -348,12 +414,28 @@ def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_na
             x=years,
             y=benchmark_annual.values,
             name=benchmark_name,
-            marker_color='#3b82f6',
-            text=[f"{v:.1f}%" for v in benchmark_annual.values],
+            marker=dict(color='rgba(107, 114, 128, 0.7)', line=dict(width=0)),
+            text=[f"{v:.0f}%" for v in benchmark_annual.values],
             textposition='outside',
+            textfont=dict(size=14, color='#1F2937'),
             hovertemplate='%{y:.2f}%<extra></extra>'
         )
     )
+
+    # Add comparison fund bars if provided
+    if comparison_returns is not None and comparison_name is not None:
+        fig.add_trace(
+            go.Bar(
+                x=years,
+                y=comparison_annual.values,
+                name=comparison_name,
+                marker=dict(color='rgba(16, 185, 129, 0.8)', line=dict(width=0)),
+                text=[f"{v:.0f}%" for v in comparison_annual.values],
+                textposition='outside',
+                textfont=dict(size=14, color='#1F2937'),
+                hovertemplate='%{y:.2f}%<extra></extra>'
+            )
+        )
 
     # Update layout
     fig.update_layout(
@@ -367,6 +449,233 @@ def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_na
         hovermode='x unified',
         margin=dict(t=80, b=110, l=50, r=50)  # Extra top margin for labels, bottom for legend
     )
+
+    return fig
+
+def create_performance_overview_subplot(strategy_returns, benchmark_returns, strategy_name, benchmark_name,
+                                        comparison_returns=None, comparison_name=None, log_scale=False):
+    """Create a 3-row subplot with cumulative returns, drawdown, and annual returns
+
+    Args:
+        strategy_returns: Series with strategy daily returns
+        benchmark_returns: Series with benchmark daily returns
+        strategy_name: String name of strategy fund
+        benchmark_name: String name of benchmark
+        comparison_returns: Optional Series with comparison fund returns
+        comparison_name: Optional String name of comparison fund
+        log_scale: Boolean, if True uses log scale for cumulative returns subplot
+
+    Returns:
+        Plotly figure with 3 subplots
+    """
+    # Create subplot with 3 rows
+    fig = make_subplots(
+        rows=3, cols=1,
+        row_heights=[0.4, 0.3, 0.3],
+        vertical_spacing=0.08,
+        subplot_titles=("Cumulative Returns" + (" (Log Scale)" if log_scale else ""),
+                       "Drawdown Comparison",
+                       "Annual Returns")
+    )
+
+    # === ROW 1: CUMULATIVE RETURNS ===
+    strategy_cum = (1 + strategy_returns).cumprod()
+    benchmark_cum = (1 + benchmark_returns).cumprod()
+
+    if log_scale:
+        # Log scale: show as growth multiplier
+        fig.add_trace(go.Scatter(
+            x=strategy_cum.index,
+            y=strategy_cum,
+            name=strategy_name,
+            line=dict(color='#f59e0b', width=2),
+            hovertemplate='%{y:.2f}x<extra></extra>',
+            showlegend=True
+        ), row=1, col=1)
+
+        fig.add_trace(go.Scatter(
+            x=benchmark_cum.index,
+            y=benchmark_cum,
+            name=benchmark_name,
+            line=dict(color='#6B7280', width=2, dash='dash'),
+            hovertemplate='%{y:.2f}x<extra></extra>',
+            showlegend=True
+        ), row=1, col=1)
+
+        if comparison_returns is not None and comparison_name is not None:
+            comparison_cum = (1 + comparison_returns).cumprod()
+            fig.add_trace(go.Scatter(
+                x=comparison_cum.index,
+                y=comparison_cum,
+                name=comparison_name,
+                line=dict(color='#10b981', width=2),
+                hovertemplate='%{y:.2f}x<extra></extra>',
+                showlegend=True
+            ), row=1, col=1)
+
+        fig.update_yaxes(title_text="Growth of $1", type="log", row=1, col=1)
+    else:
+        # Linear scale: show as percentage
+        fig.add_trace(go.Scatter(
+            x=strategy_cum.index,
+            y=(strategy_cum - 1) * 100,
+            name=strategy_name,
+            line=dict(color='#f59e0b', width=2),
+            hovertemplate='%{y:.2f}%<extra></extra>',
+            showlegend=True
+        ), row=1, col=1)
+
+        fig.add_trace(go.Scatter(
+            x=benchmark_cum.index,
+            y=(benchmark_cum - 1) * 100,
+            name=benchmark_name,
+            line=dict(color='#6B7280', width=2, dash='dash'),
+            hovertemplate='%{y:.2f}%<extra></extra>',
+            showlegend=True
+        ), row=1, col=1)
+
+        if comparison_returns is not None and comparison_name is not None:
+            comparison_cum = (1 + comparison_returns).cumprod()
+            fig.add_trace(go.Scatter(
+                x=comparison_cum.index,
+                y=(comparison_cum - 1) * 100,
+                name=comparison_name,
+                line=dict(color='#10b981', width=2),
+                hovertemplate='%{y:.2f}%<extra></extra>',
+                showlegend=True
+            ), row=1, col=1)
+
+        fig.update_yaxes(title_text="Cumulative Return (%)", row=1, col=1)
+
+    # === ROW 2: DRAWDOWN ===
+    # Calculate strategy drawdown
+    strategy_cumulative = (1 + strategy_returns).cumprod()
+    strategy_running_max = strategy_cumulative.expanding().max()
+    strategy_drawdown = (strategy_cumulative - strategy_running_max) / strategy_running_max * 100
+
+    # Calculate benchmark drawdown
+    benchmark_cumulative = (1 + benchmark_returns).cumprod()
+    benchmark_running_max = benchmark_cumulative.expanding().max()
+    benchmark_drawdown = (benchmark_cumulative - benchmark_running_max) / benchmark_running_max * 100
+
+    fig.add_trace(go.Scatter(
+        x=strategy_drawdown.index,
+        y=strategy_drawdown,
+        name=strategy_name,
+        fill='tozeroy',
+        line=dict(color='#f59e0b', width=2),
+        fillcolor='rgba(245, 158, 11, 0.3)',
+        hovertemplate='%{y:.2f}%<extra></extra>',
+        showlegend=False
+    ), row=2, col=1)
+
+    fig.add_trace(go.Scatter(
+        x=benchmark_drawdown.index,
+        y=benchmark_drawdown,
+        name=benchmark_name,
+        fill='tozeroy',
+        line=dict(color='#6B7280', width=2, dash='dash'),
+        fillcolor='rgba(107, 114, 128, 0.2)',
+        hovertemplate='%{y:.2f}%<extra></extra>',
+        showlegend=False
+    ), row=2, col=1)
+
+    if comparison_returns is not None and comparison_name is not None:
+        comparison_cumulative = (1 + comparison_returns).cumprod()
+        comparison_running_max = comparison_cumulative.expanding().max()
+        comparison_drawdown = (comparison_cumulative - comparison_running_max) / comparison_running_max * 100
+
+        fig.add_trace(go.Scatter(
+            x=comparison_drawdown.index,
+            y=comparison_drawdown,
+            name=comparison_name,
+            fill='tozeroy',
+            line=dict(color='#10b981', width=2),
+            fillcolor='rgba(16, 185, 129, 0.3)',
+            hovertemplate='%{y:.2f}%<extra></extra>',
+            showlegend=False
+        ), row=2, col=1)
+
+    fig.update_yaxes(title_text="Drawdown (%)", row=2, col=1)
+
+    # === ROW 3: ANNUAL RETURNS ===
+    # Calculate annual returns
+    strategy_annual = strategy_returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+    benchmark_annual = benchmark_returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+
+    # Align both series to ensure they have the same years
+    strategy_annual, benchmark_annual = strategy_annual.align(benchmark_annual, join='outer', fill_value=0)
+
+    # If comparison fund is provided, add it to alignment
+    if comparison_returns is not None:
+        comparison_annual = comparison_returns.resample('YE').apply(lambda x: (1 + x).prod() - 1) * 100
+        strategy_annual, comparison_annual = strategy_annual.align(comparison_annual, join='outer', fill_value=0)
+        benchmark_annual, comparison_annual = benchmark_annual.align(comparison_annual, join='outer', fill_value=0)
+
+    # Extract years
+    years = strategy_annual.index.year
+
+    # Add strategy bars
+    fig.add_trace(
+        go.Bar(
+            x=years,
+            y=strategy_annual.values,
+            name=strategy_name,
+            marker=dict(color='rgba(245, 158, 11, 0.8)', line=dict(width=0)),
+            text=[f"{v:.0f}%" for v in strategy_annual.values],
+            textposition='outside',
+            textfont=dict(size=11, color='#1F2937'),
+            hovertemplate='%{y:.2f}%<extra></extra>',
+            showlegend=False
+        ), row=3, col=1
+    )
+
+    # Add benchmark bars
+    fig.add_trace(
+        go.Bar(
+            x=years,
+            y=benchmark_annual.values,
+            name=benchmark_name,
+            marker=dict(color='rgba(107, 114, 128, 0.7)', line=dict(width=0)),
+            text=[f"{v:.0f}%" for v in benchmark_annual.values],
+            textposition='outside',
+            textfont=dict(size=11, color='#1F2937'),
+            hovertemplate='%{y:.2f}%<extra></extra>',
+            showlegend=False
+        ), row=3, col=1
+    )
+
+    # Add comparison fund bars if provided
+    if comparison_returns is not None and comparison_name is not None:
+        fig.add_trace(
+            go.Bar(
+                x=years,
+                y=comparison_annual.values,
+                name=comparison_name,
+                marker=dict(color='rgba(16, 185, 129, 0.8)', line=dict(width=0)),
+                text=[f"{v:.0f}%" for v in comparison_annual.values],
+                textposition='outside',
+                textfont=dict(size=11, color='#1F2937'),
+                hovertemplate='%{y:.2f}%<extra></extra>',
+                showlegend=False
+            ), row=3, col=1
+        )
+
+    fig.update_xaxes(title_text="Year", row=3, col=1)
+    fig.update_yaxes(title_text="Return (%)", row=3, col=1)
+
+    # === OVERALL LAYOUT ===
+    fig.update_layout(
+        height=1200,
+        template='plotly_white',
+        hovermode='x unified',
+        legend=dict(orientation="h", yanchor="top", y=1.04, xanchor="left", x=0),
+        margin=dict(t=80, b=80, l=60, r=60),
+        barmode='group'
+    )
+
+    # Update all y-axes to be on right side
+    fig.update_yaxes(side='right')
 
     return fig
 
@@ -469,7 +778,7 @@ def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_nam
         x=benchmark_cum.index,
         y=benchmark_growth,
         name=f"🔷 {benchmark_name}",
-        line=dict(color='#000000', width=3, dash='dash'),
+        line=dict(color='#6B7280', width=3, dash='dash'),
         customdata=customdata_bench,
         hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Value: ₹%{y:.2f}<br>CAGR: %{customdata[0]:.2f}%<extra></extra>'
     ))
@@ -611,8 +920,8 @@ def create_annual_returns_bubble_chart(returns_dict, benchmark_returns, benchmar
             size=benchmark_data['Annual Volatility'],
             sizemode='diameter',
             sizeref=2,
-            color='#000000',
-            line=dict(width=2, color='red'),
+            color='#6B7280',
+            line=dict(width=2, color='#9CA3AF'),
             opacity=0.9,
             symbol='diamond'
         ),
@@ -2114,7 +2423,7 @@ def create_rolling_metric_chart(returns_dict, benchmark_returns, benchmark_name,
         x=benchmark_metric.index,
         y=benchmark_metric,
         name=f"🔷 {benchmark_name}",
-        line=dict(color='#000000', width=3, dash='dash'),
+        line=dict(color='#6B7280', width=3, dash='dash'),
         hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Value: %{y:.2f}<extra></extra>'
     ))
 
@@ -2147,6 +2456,7 @@ def create_rolling_metric_chart(returns_dict, benchmark_returns, benchmark_name,
         ),
         xaxis_title="Date",
         yaxis_title=y_labels.get(metric_type, metric_type),
+        yaxis=dict(side='right'),
         hovermode='closest',
         height=500,
         template='plotly_white',
@@ -2539,3 +2849,213 @@ def create_metric_distribution_chart(metrics_df, metric_name, order_by='median')
         add_zero_line=config['add_zero_line'],
         decimal_places=config['decimal_places']
     )
+
+
+def create_monthly_returns_scatter(strategy_monthly_returns, benchmark_monthly_returns,
+                                   strategy_name, benchmark_name,
+                                   comparison_monthly_returns=None, comparison_name=None):
+    """Create scatter plot of monthly returns: fund vs benchmark with trendlines
+
+    Shows relationship between benchmark and fund monthly returns with:
+    - Scatter points for each month
+    - Linear trendline (beta relationship)
+    - Optional comparison fund overlay
+
+    Args:
+        strategy_monthly_returns: pd.Series with monthly fund returns (decimal format)
+        benchmark_monthly_returns: pd.Series with monthly benchmark returns (decimal format)
+        strategy_name: str, name of strategy fund
+        benchmark_name: str, name of benchmark
+        comparison_monthly_returns: pd.Series, optional comparison fund monthly returns
+        comparison_name: str, optional name of comparison fund
+
+    Returns:
+        plotly.graph_objects.Figure
+    """
+    import plotly.graph_objects as go
+    import numpy as np
+
+    # Align series to matching dates
+    aligned_fund, aligned_bench = strategy_monthly_returns.align(
+        benchmark_monthly_returns, join='inner'
+    )
+
+    # Convert to percentage for display
+    bench_pct = aligned_bench.values * 100
+    fund_pct = aligned_fund.values * 100
+    dates = aligned_fund.index
+
+    # Create figure
+    fig = go.Figure()
+
+    # Add main fund scatter points
+    fig.add_trace(go.Scatter(
+        x=bench_pct,
+        y=fund_pct,
+        mode='markers',
+        marker=dict(
+            size=8,
+            color='#f59e0b',  # Orange for main fund
+            line=dict(width=1, color='white'),
+            opacity=0.7
+        ),
+        text=[f"Date: {d.strftime('%b %Y')}<br>Benchmark: {b:.2f}%<br>{strategy_name}: {f:.2f}%"
+              for d, b, f in zip(dates, bench_pct, fund_pct)],
+        hovertemplate='%{text}<extra></extra>',
+        name=strategy_name,
+        showlegend=True
+    ))
+
+    # Add main fund trendline
+    if len(fund_pct) > 1:
+        z = np.polyfit(bench_pct, fund_pct, 1)
+        p = np.poly1d(z)
+        trendline_x = np.linspace(bench_pct.min(), bench_pct.max(), 100)
+        trendline_y = p(trendline_x)
+
+        fig.add_trace(go.Scatter(
+            x=trendline_x,
+            y=trendline_y,
+            mode='lines',
+            name=f'{strategy_name} Trendline',
+            line=dict(color='#f59e0b', width=2, dash='dash'),
+            showlegend=False,  # Hide from legend (same color as dots)
+            hoverinfo='skip'
+        ))
+
+    # Calculate initial min/max for Y=X reference line
+    min_val = min(bench_pct.min(), fund_pct.min())
+    max_val = max(bench_pct.max(), fund_pct.max())
+
+    # Add comparison fund if provided
+    if comparison_monthly_returns is not None and comparison_name is not None:
+        aligned_comp, aligned_bench_comp = comparison_monthly_returns.align(
+            benchmark_monthly_returns, join='inner'
+        )
+
+        comp_pct = aligned_comp.values * 100
+        bench_comp_pct = aligned_bench_comp.values * 100
+        dates_comp = aligned_comp.index
+
+        # Comparison scatter points
+        fig.add_trace(go.Scatter(
+            x=bench_comp_pct,
+            y=comp_pct,
+            mode='markers',
+            marker=dict(
+                size=8,
+                color='#10b981',  # Green for comparison fund
+                line=dict(width=1, color='white'),
+                opacity=0.7
+            ),
+            text=[f"Date: {d.strftime('%b %Y')}<br>Benchmark: {b:.2f}%<br>{comparison_name}: {c:.2f}%"
+                  for d, b, c in zip(dates_comp, bench_comp_pct, comp_pct)],
+            hovertemplate='%{text}<extra></extra>',
+            name=comparison_name,
+            showlegend=True
+        ))
+
+        # Comparison trendline
+        if len(comp_pct) > 1:
+            z_comp = np.polyfit(bench_comp_pct, comp_pct, 1)
+            p_comp = np.poly1d(z_comp)
+            trendline_x_comp = np.linspace(bench_comp_pct.min(), bench_comp_pct.max(), 100)
+            trendline_y_comp = p_comp(trendline_x_comp)
+
+            fig.add_trace(go.Scatter(
+                x=trendline_x_comp,
+                y=trendline_y_comp,
+                mode='lines',
+                name=f'{comparison_name} Trendline',
+                line=dict(color='#10b981', width=2, dash='dash'),
+                showlegend=False,  # Hide from legend (same color as dots)
+                hoverinfo='skip'
+            ))
+
+        # Update Y=X reference line to include comparison fund range
+        min_val = min(min_val, comp_pct.min())
+        max_val = max(max_val, comp_pct.max())
+
+    # Add Y=X reference line (after calculating final min/max)
+    fig.add_trace(go.Scatter(
+        x=[min_val, max_val],
+        y=[min_val, max_val],
+        mode='lines',
+        name='Y=X Reference',
+        line=dict(color='gray', width=1, dash='dot'),
+        showlegend=True,
+        hoverinfo='skip'
+    ))
+
+    # Update layout
+    fig.update_layout(
+        title=dict(
+            text="Monthly Returns: Fund vs Benchmark",
+            font=dict(size=16, weight='bold')
+        ),
+        xaxis_title=f"{benchmark_name} Monthly Returns (%)",
+        yaxis_title="Fund Monthly Returns (%)",
+        height=500,
+        template='plotly_white',
+        hovermode='closest',
+        xaxis=dict(
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='lightgray',
+            zeroline=True,
+            zerolinewidth=2,
+            zerolinecolor='black'
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='lightgray',
+            zeroline=True,
+            zerolinewidth=2,
+            zerolinecolor='black'
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.25,
+            xanchor="center",
+            x=0.5,
+            bgcolor="rgba(255,255,255,0.8)"
+        )
+    )
+
+    return fig
+
+
+def create_comparison_metrics_table(strategy_metrics, benchmark_name,
+                                    comparison_metrics=None, comparison_name=None):
+    """Create table showing R², Correlation, Beta for fund vs benchmark
+
+    Args:
+        strategy_metrics: dict with strategy fund metrics (includes R², Correlation, Beta)
+        benchmark_name: str, name of benchmark
+        comparison_metrics: dict, optional comparison fund metrics
+        comparison_name: str, optional comparison fund name
+
+    Returns:
+        pd.DataFrame formatted for display
+    """
+    import pandas as pd
+
+    # Metrics to display
+    metric_keys = ['R²', 'Correlation', 'Beta']
+
+    data = []
+    for metric in metric_keys:
+        row = {
+            'Metric': metric,
+            'Main Fund': f"{strategy_metrics.get(metric, 0):.4f}"
+        }
+
+        if comparison_metrics is not None:
+            row['Comp Fund'] = f"{comparison_metrics.get(metric, 0):.4f}"
+
+        data.append(row)
+
+    df = pd.DataFrame(data)
+    return df

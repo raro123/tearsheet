@@ -5,6 +5,7 @@ This is the original tearsheet functionality
 """
 import streamlit as st
 import pandas as pd
+import hashlib
 from src.data_loader import calculate_returns
 from src.metrics import calculate_all_metrics
 from src.computation_cache import (
@@ -20,9 +21,13 @@ from src.visualizations import (
     create_annual_returns_chart,
     create_drawdown_comparison_chart,
     create_rolling_returns_chart,
-    create_monthly_returns_table
+    create_monthly_returns_table,
+    create_monthly_returns_scatter,
+    create_comparison_metrics_table,
+    create_performance_overview_subplot
 )
-from utils.helpers import create_metrics_comparison_df, get_period_description
+from utils.helpers import create_metrics_comparison_df, get_period_description, create_metric_category_df, highlight_outliers_in_monthly_table
+from src.shared_components import filter_funds_by_plan_type
 
 
 def render(data_loader):
@@ -40,6 +45,22 @@ def render(data_loader):
 
         # Get all funds
         all_funds = data_loader.get_available_funds()
+
+        # Plan Type filter
+        st.subheader("🏷️ Plan Type")
+        plan_type = st.radio(
+            "Plan Type",
+            options=["All", "Direct", "Regular"],
+            index=0,  # Default to "All"
+            horizontal=True,
+            help="Filter funds by plan type",
+            key="fd_plan_type"
+        )
+
+        # Apply plan type filter to all_funds
+        all_funds = filter_funds_by_plan_type(all_funds, plan_type)
+
+        st.markdown("---")
 
         # Category filters
         st.subheader("🏷️ Fund Filters")
@@ -115,8 +136,71 @@ def render(data_loader):
             key="fd_benchmark"
         )
 
+        st.markdown("---")
+
+        # Comparison Fund Selection (Optional)
+        st.subheader("🔬 Add Comparison Fund (Optional)")
+
+        enable_comparison = st.checkbox(
+            "Enable Comparison Fund",
+            value=False,
+            help="Add a third fund to compare alongside strategy and benchmark",
+            key="fd_enable_comparison"
+        )
+
+        if enable_comparison:
+            # Category filters for comparison fund
+            st.caption("**Fund Filters**")
+
+            comparison_categories_level1 = all_funds.scheme_category_level1.dropna().unique().tolist()
+
+            selected_comparison_category_level1 = st.selectbox(
+                "Scheme Type",
+                comparison_categories_level1,
+                help="Select high-level scheme category",
+                key="fd_comp_cat_l1"
+            )
+
+            # Get level 2 categories for comparison
+            comparison_categories_level2 = (all_funds
+                                           .query("scheme_category_level1 == @selected_comparison_category_level1")
+                                           .scheme_category_level2.unique().tolist())
+            comparison_categories_level2 = ["ALL"] + comparison_categories_level2
+
+            selected_comparison_category_level2 = st.selectbox(
+                "Scheme Category",
+                comparison_categories_level2,
+                help="Select specific scheme category",
+                key="fd_comp_cat_l2"
+            )
+
+            # Filter funds based on category selection
+            if selected_comparison_category_level2 == "ALL":
+                comparison_fund_options = (all_funds
+                    .query("scheme_category_level1 == @selected_comparison_category_level1")
+                    ['display_name'].tolist())
+            else:
+                comparison_fund_options = (all_funds
+                    .query("scheme_category_level1 == @selected_comparison_category_level1 and scheme_category_level2 == @selected_comparison_category_level2")
+                    ['display_name'].tolist())
+
+            # Exclude currently selected strategy fund
+            comparison_fund_options = [f for f in comparison_fund_options if f != selected_fund_scheme]
+
+            st.caption("**Fund Selection**")
+            selected_comparison_fund = st.selectbox(
+                "Comparison Fund",
+                comparison_fund_options,
+                help="Select a fund to compare",
+                key="fd_comparison_fund"
+            )
+        else:
+            selected_comparison_fund = None
+
         st.caption(f"**Strategy:** {selected_fund_scheme}")
         st.caption(f"**Benchmark:** {selected_benchmark_index} ({index_type})")
+        if enable_comparison and selected_comparison_fund:
+            st.caption(f"**Comparison:** {selected_comparison_fund}")
 
         # Date range
         st.subheader("📅 Analysis Period")
@@ -127,11 +211,27 @@ def render(data_loader):
         fund_min_date, fund_max_date = data_loader.get_fund_date_range(fund_scheme_code)
         benchmark_min_date, benchmark_max_date = data_loader.get_benchmark_date_range(selected_benchmark_index, index_type)
 
-        # Calculate common date range
-        common_min_date = max(fund_min_date, benchmark_min_date) if fund_min_date and benchmark_min_date else None
-        common_max_date = min(fund_max_date, benchmark_max_date) if fund_max_date and benchmark_max_date else None
+        # Get comparison fund date range if enabled
+        comparison_min_date = None
+        comparison_max_date = None
+        if enable_comparison and selected_comparison_fund:
+            comparison_scheme_code = selected_comparison_fund.split('|')[1]
+            comparison_min_date, comparison_max_date = data_loader.get_fund_date_range(comparison_scheme_code)
+
+        # Calculate common date range across all selected items
+        date_ranges_start = [d for d in [fund_min_date, benchmark_min_date, comparison_min_date] if d is not None]
+        date_ranges_end = [d for d in [fund_max_date, benchmark_max_date, comparison_max_date] if d is not None]
+
+        common_min_date = max(date_ranges_start) if date_ranges_start else None
+        common_max_date = min(date_ranges_end) if date_ranges_end else None
 
         overall_min_date, overall_max_date = data_loader.get_data_date_range()
+
+        # Create dynamic keys based on selections to reset dates when selections change
+        # This ensures date inputs update to new common ranges when fund selections change
+        comparison_part = selected_comparison_fund if (enable_comparison and selected_comparison_fund) else ""
+        selections_str = f"{selected_fund_scheme}_{selected_benchmark_index}_{comparison_part}"
+        selections_hash = hashlib.md5(selections_str.encode()).hexdigest()[:8]
 
         with col1:
             start_date = st.date_input(
@@ -139,7 +239,7 @@ def render(data_loader):
                 value=common_min_date if common_min_date else overall_min_date,
                 min_value=overall_min_date,
                 max_value=overall_max_date,
-                key="fd_start_date"
+                key=f"fd_start_{selections_hash}"
             )
 
         with col2:
@@ -148,11 +248,15 @@ def render(data_loader):
                 value=common_max_date if common_max_date else overall_max_date,
                 min_value=overall_min_date,
                 max_value=overall_max_date,
-                key="fd_end_date"
+                key=f"fd_end_{selections_hash}"
             )
 
         period_desc = get_period_description(pd.Timestamp(start_date), pd.Timestamp(end_date))
-        st.caption(f"Analysis period: {period_desc}")
+        # Show which items' data availability determined the default range
+        if enable_comparison and selected_comparison_fund:
+            st.caption(f"Analysis period: {period_desc} | Common data range for Main Fund, Benchmark & Comp Fund")
+        else:
+            st.caption(f"Analysis period: {period_desc} | Common data range for Main Fund & Benchmark")
 
         # Risk-free rate
         st.subheader("⚙️ Parameters")
@@ -232,8 +336,41 @@ def render(data_loader):
         risk_free_rate, start_date, end_date
     )
 
+    # Load comparison fund data if enabled
+    if enable_comparison and selected_comparison_fund:
+        with st.spinner("Loading comparison fund data..."):
+            comparison_df = data_loader.load_fund_data(
+                start_date=start_date,
+                end_date=end_date,
+                selected_fund_schemes=[selected_comparison_fund]
+            )
+
+            if comparison_df is not None and len(comparison_df) > 0:
+                comparison_nav = comparison_df[selected_comparison_fund]
+                comparison_returns = calculate_returns(comparison_nav)
+                comparison_name = selected_comparison_fund
+
+                # Calculate metrics for comparison fund
+                comparison_metrics = get_cached_metrics(
+                    comparison_name, comparison_returns, benchmark_returns,
+                    risk_free_rate, start_date, end_date
+                )
+            else:
+                st.warning("⚠️ No data available for comparison fund in selected date range")
+                comparison_returns = None
+                comparison_name = None
+                comparison_metrics = None
+    else:
+        comparison_returns = None
+        comparison_name = None
+        comparison_metrics = None
+
     # === SECTION 1: PERFORMANCE SUMMARY ===
-    st.caption(f"📊 **{strategy_name}** vs **{benchmark_name}** | Period: {start_date} to {end_date} ({period_desc})")
+    # Dynamic header based on comparison fund selection
+    if comparison_returns is not None:
+        st.caption(f"📊 **{strategy_name}** vs **{benchmark_name}** vs **{comparison_name}** | Period: {start_date} to {end_date} ({period_desc})")
+    else:
+        st.caption(f"📊 **{strategy_name}** vs **{benchmark_name}** | Period: {start_date} to {end_date} ({period_desc})")
 
     col1, col2, col3, col4, col5 = st.columns(5)
 
@@ -244,6 +381,14 @@ def render(data_loader):
             delta=f"{(strategy_metrics['Cumulative Return'] - benchmark_metrics['Cumulative Return'])*100:.1f}% vs BM",
             help="Total cumulative return over the period"
         )
+        if comparison_returns is not None:
+            delta_cf = (strategy_metrics['Cumulative Return'] - comparison_metrics['Cumulative Return'])*100
+            st.metric(
+                label="",
+                value="",
+                delta=f"{delta_cf:.1f}% vs CF",
+                label_visibility="collapsed"
+            )
 
     with col2:
         st.metric(
@@ -252,6 +397,14 @@ def render(data_loader):
             delta=f"{(strategy_metrics['CAGR'] - benchmark_metrics['CAGR'])*100:.1f}% vs BM",
             help="Compound Annual Growth Rate"
         )
+        if comparison_returns is not None:
+            delta_cf = (strategy_metrics['CAGR'] - comparison_metrics['CAGR'])*100
+            st.metric(
+                label="",
+                value="",
+                delta=f"{delta_cf:.1f}% vs CF",
+                label_visibility="collapsed"
+            )
 
     with col3:
         st.metric(
@@ -260,6 +413,14 @@ def render(data_loader):
             delta=f"{strategy_metrics['Sharpe Ratio'] - benchmark_metrics['Sharpe Ratio']:.2f} vs BM",
             help="Risk-adjusted return metric"
         )
+        if comparison_returns is not None:
+            delta_cf = strategy_metrics['Sharpe Ratio'] - comparison_metrics['Sharpe Ratio']
+            st.metric(
+                label="",
+                value="",
+                delta=f"{delta_cf:.2f} vs CF",
+                label_visibility="collapsed"
+            )
 
     with col4:
         st.metric(
@@ -269,6 +430,15 @@ def render(data_loader):
             delta_color="inverse",
             help="Maximum peak-to-trough decline"
         )
+        if comparison_returns is not None:
+            delta_cf = (comparison_metrics['Max Drawdown'] - strategy_metrics['Max Drawdown'])*100
+            st.metric(
+                label="",
+                value="",
+                delta=f"{delta_cf:.1f}% vs CF",
+                delta_color="inverse",
+                label_visibility="collapsed"
+            )
 
     with col5:
         st.metric(
@@ -278,167 +448,210 @@ def render(data_loader):
             delta_color="inverse",
             help="Annualized standard deviation"
         )
+        if comparison_returns is not None:
+            delta_cf = (strategy_metrics['Volatility (ann.)'] - comparison_metrics['Volatility (ann.)'])*100
+            st.metric(
+                label="",
+                value="",
+                delta=f"{delta_cf:.1f}% vs CF",
+                delta_color="inverse",
+                label_visibility="collapsed"
+            )
 
     st.markdown("---")
 
-    # === SECTION 2: CHARTS & METRICS ===
-    col_left, col_right = st.columns([2, 1])
+    # === SECTION 2A: PERFORMANCE OVERVIEW ===
+    # Log scale toggle
+    log_scale = st.toggle("Log Scale for Cumulative Returns", value=True, key="fd_log_scale")
 
-    with col_left:
-        # Cumulative Returns
-        on = st.toggle("Log Scale Y-Axis", value=True, key="fd_log_scale")
-        if not on:
-            st.plotly_chart(
-                create_cumulative_returns_chart(
-                    strategy_returns, benchmark_returns,
-                    strategy_name, benchmark_name
-                ),
-                use_container_width=True
-            )
-        else:
-            st.plotly_chart(
-                create_log_returns_chart(
-                    strategy_returns, benchmark_returns,
-                    strategy_name, benchmark_name
-                ),
-                use_container_width=True
-            )
+    # Single subplot with cumulative returns, drawdown, and annual returns
+    st.plotly_chart(
+        create_performance_overview_subplot(
+            strategy_returns, benchmark_returns,
+            strategy_name, benchmark_name,
+            comparison_returns, comparison_name,
+            log_scale=log_scale
+        ),
+        use_container_width=True
+    )
 
-        # Drawdown Comparison
-        st.plotly_chart(
-            create_drawdown_comparison_chart(
-                strategy_returns, benchmark_returns,
-                strategy_name, benchmark_name
-            ),
-            use_container_width=True
-        )
-
-        # Rolling Returns
-        rolling_period = st.selectbox(
-            "Rolling Period",
-            options=[("1 Year", 252), ("3 Years", 756), ("5 Years", 1260)],
-            format_func=lambda x: x[0],
-            index=0,
-            key="fd_rolling_period"
-        )
-
-        st.plotly_chart(
-            create_rolling_returns_chart(
-                strategy_returns, benchmark_returns,
-                strategy_name, benchmark_name,
-                window=rolling_period[1]
-            ),
-            use_container_width=True
-        )
-
-        # Annual Returns
-        st.plotly_chart(
-            create_annual_returns_chart(
-                strategy_returns, benchmark_returns,
-                strategy_name, benchmark_name
-            ),
-            use_container_width=True
-        )
-
-    with col_right:
-        # Metrics Table
-        st.caption("📊 **Performance Metrics**")
-
-        # Get data periods
-        strategy_data_start = strategy_nav.index.min().strftime('%Y-%m-%d')
-        strategy_data_end = strategy_nav.index.max().strftime('%Y-%m-%d')
-        benchmark_data_start = benchmark_nav.index.min().strftime('%Y-%m-%d')
-        benchmark_data_end = benchmark_nav.index.max().strftime('%Y-%m-%d')
-
-        strategy_data_period = f"{strategy_data_start} to {strategy_data_end}"
-        benchmark_data_period = f"{benchmark_data_start} to {benchmark_data_end}"
-        comparison_period = f"{start_date} to {end_date}"
-
-        # Shorten names
-        strategy_display = strategy_name if len(strategy_name) <= 40 else strategy_name[:37] + "..."
-        benchmark_display = benchmark_name if len(benchmark_name) <= 40 else benchmark_name[:37] + "..."
-
-        metrics_df = create_metrics_comparison_df(
-            strategy_metrics, benchmark_metrics,
-            strategy_name=strategy_display,
-            benchmark_name=benchmark_display,
-            strategy_data_period=strategy_data_period,
-            benchmark_data_period=benchmark_data_period,
-            comparison_period=comparison_period
-        )
-
-        # Styling
-        def highlight_section_headers(row):
-            if '──' in str(row['Metric']):
-                return ['background-color: #1F2937; color: white; font-weight: bold'] * len(row)
-            elif row['Metric'] in ['Name', 'Data Period', 'Comparison Period']:
-                return ['background-color: #374151; color: white; font-weight: bold'] * len(row)
-            return [''] * len(row)
-
-        styled_metrics = metrics_df.style.apply(highlight_section_headers, axis=1)
-
-        st.dataframe(
-            styled_metrics,
-            hide_index=True,
-            use_container_width=True,
-            height=1200,
-            column_config={
-                "Metric": st.column_config.TextColumn("Metric", width="medium"),
-                "Strategy": st.column_config.TextColumn("Strategy", width="small"),
-                "Benchmark": st.column_config.TextColumn("Benchmark", width="small"),
-            }
-        )
-
-        # Download
-        csv = metrics_df.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Metrics CSV",
-            data=csv,
-            file_name=f"metrics_{strategy_name}_vs_{benchmark_name}.csv",
-            mime="text/csv"
-        )
-
-    # === SECTION 3: MONTHLY RETURNS ===
+    # === SECTION 2B: PERFORMANCE METRICS ===
     st.markdown("---")
-    st.caption("📅 **Monthly Returns (%)** | Color-coded heatmap showing monthly performance")
+    st.caption("📊 **Performance Metrics** | Comprehensive metrics across return, risk, and ratio categories")
 
-    col1, col2 = st.columns(2)
+    # Shorten names for display
+    strategy_display = strategy_name if len(strategy_name) <= 30 else strategy_name[:27] + "..."
+    benchmark_display = benchmark_name if len(benchmark_name) <= 30 else benchmark_name[:27] + "..."
+    comparison_display = None
+    if comparison_name:
+        comparison_display = comparison_name if len(comparison_name) <= 30 else comparison_name[:27] + "..."
+
+    # Define metric categories
+    return_metrics = ['Cumulative Return', 'CAGR', 'Expected Annual Return', 'Expected Monthly Return', 'Expected Daily Return', 'Win Rate', 'Max Consecutive Wins']
+    risk_metrics = ['Volatility (ann.)', 'Max Drawdown', 'Avg Drawdown', 'Longest DD Days', 'Skewness', 'VaR (95%)', 'CVaR (95%)']
+    ratio_metrics = ['Sharpe Ratio', 'Sortino Ratio', 'Calmar Ratio', 'Omega Ratio', 'Lower Tail Ratio', 'Upper Tail Ratio']
+
+    col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.caption(f"**{strategy_name}**")
-        strategy_monthly_table = create_monthly_returns_table(strategy_returns)
-
-        styled_strategy = strategy_monthly_table.style.background_gradient(
-            cmap='RdYlGn',
-            subset=[col for col in strategy_monthly_table.columns if col != 'Year'],
-            vmin=-10,
-            vmax=10
-        ).format({col: '{:.2f}' for col in strategy_monthly_table.columns if col != 'Year'})
-
-        st.dataframe(
-            styled_strategy,
-            hide_index=True,
-            use_container_width=True,
-            height=400
-        )
+        st.caption("📊 **Return Metrics**")
+        return_df = create_metric_category_df(strategy_metrics, benchmark_metrics, return_metrics,
+                                              strategy_display, benchmark_display,
+                                              comparison_metrics, comparison_display)
+        st.dataframe(return_df, hide_index=True, use_container_width=True)
 
     with col2:
-        st.caption(f"**{benchmark_name}**")
-        benchmark_monthly_table = create_monthly_returns_table(benchmark_returns)
+        st.caption("⚠️ **Risk Metrics**")
+        risk_df = create_metric_category_df(strategy_metrics, benchmark_metrics, risk_metrics,
+                                            strategy_display, benchmark_display,
+                                            comparison_metrics, comparison_display)
+        st.dataframe(risk_df, hide_index=True, use_container_width=True)
 
-        styled_benchmark = benchmark_monthly_table.style.background_gradient(
-            cmap='RdYlGn',
-            subset=[col for col in benchmark_monthly_table.columns if col != 'Year'],
-            vmin=-10,
-            vmax=10
-        ).format({col: '{:.2f}' for col in benchmark_monthly_table.columns if col != 'Year'})
+    with col3:
+        st.caption("📈 **Ratio Metrics**")
+        ratio_df = create_metric_category_df(strategy_metrics, benchmark_metrics, ratio_metrics,
+                                             strategy_display, benchmark_display,
+                                             comparison_metrics, comparison_display)
+        st.dataframe(ratio_df, hide_index=True, use_container_width=True)
 
-        st.dataframe(
-            styled_benchmark,
-            hide_index=True,
-            use_container_width=True,
-            height=400
+    # Helper text with color indicators (shown once below all tables)
+    if comparison_metrics is not None:
+        st.caption(f"🟠 Main Fund: {strategy_display} | 🔵 Benchmark: {benchmark_display} | 🟢 Comp Fund: {comparison_display}")
+    else:
+        st.caption(f"🟠 Main Fund: {strategy_display} | 🔵 Benchmark: {benchmark_display}")
+
+    # === SECTION 2C: ADDITIONAL CHARTS ===
+    st.markdown("---")
+
+    # Rolling Returns
+    rolling_period = st.selectbox(
+        "Rolling Period",
+        options=[("1 Year", 252), ("3 Years", 756), ("5 Years", 1260)],
+        format_func=lambda x: x[0],
+        index=0,
+        key="fd_rolling_period"
+    )
+
+    st.plotly_chart(
+        create_rolling_returns_chart(
+            strategy_returns, benchmark_returns,
+            strategy_name, benchmark_name,
+            window=rolling_period[1],
+            comparison_returns=comparison_returns,
+            comparison_name=comparison_name
+        ),
+        use_container_width=True
+    )
+
+    # === SECTION 3: MONTHLY RETURNS ANALYSIS ===
+    st.markdown("---")
+
+    # Create toggle in the header area
+    col_header, col_toggle = st.columns([5, 1])
+
+    with col_header:
+        st.caption("📊 **Monthly Returns Analysis** | Scatter plot and detailed monthly breakdown")
+
+    # Get monthly returns for scatter plot (needed for both subsections)
+    strategy_monthly = get_cached_monthly_returns(strategy_name, strategy_returns, start_date, end_date)
+    benchmark_monthly = get_cached_monthly_returns(benchmark_name, benchmark_returns, start_date, end_date)
+
+    if comparison_returns is not None:
+        comparison_monthly = get_cached_monthly_returns(comparison_name, comparison_returns, start_date, end_date)
+    else:
+        comparison_monthly = None
+
+    # Checkbox to toggle comparison fund (only show if comparison exists)
+    show_comp_in_section = True
+    if comparison_returns is not None:
+        with col_toggle:
+            show_comp_in_section = st.checkbox(
+                "Show Comp Fund",
+                value=True,
+                key="fd_show_comp_monthly_section",
+                help="Toggle comparison fund in scatter and tables"
+            )
+
+    # Subsection 1: Scatter Plot
+    st.markdown("#### Scatter: Fund vs Benchmark Returns")
+
+    col_scatter, col_metrics = st.columns([2, 1])
+
+    with col_metrics:
+        st.caption("**Comparison Metrics vs Benchmark**")
+
+        metrics_df = create_comparison_metrics_table(
+            strategy_metrics, benchmark_name,
+            comparison_metrics if comparison_returns is not None else None,
+            comparison_name if comparison_returns is not None else None
         )
+
+        st.dataframe(metrics_df, hide_index=True, use_container_width=True)
+
+        # Helper text
+        st.caption("**R²**: % variance explained by benchmark")
+        st.caption("**Correlation**: Strength of relationship (-1 to 1)")
+        st.caption("**Beta**: Sensitivity to benchmark moves")
+
+    with col_scatter:
+        # Only pass comparison data if checkbox is checked
+        scatter_comparison_monthly = comparison_monthly if show_comp_in_section else None
+        scatter_comparison_name = comparison_name if show_comp_in_section else None
+
+        scatter_fig = create_monthly_returns_scatter(
+            strategy_monthly, benchmark_monthly,
+            strategy_name, benchmark_name,
+            scatter_comparison_monthly, scatter_comparison_name
+        )
+        st.plotly_chart(scatter_fig, use_container_width=True)
+
+    # Subsection 2: Monthly Returns Tables (Collapsible)
+    with st.expander("📅 **Monthly Returns Tables** | Outlier-highlighted (±2σ)", expanded=False):
+        st.caption("Detailed monthly breakdown with statistical outliers highlighted")
+
+        # Determine number of columns based on toggle
+        if comparison_returns is not None and show_comp_in_section:
+            col1, col2, col3 = st.columns(3)
+        else:
+            col1, col2 = st.columns(2)
+
+        with col1:
+            st.caption(f"**{strategy_name}**")
+            strategy_monthly_table = create_monthly_returns_table(strategy_returns)
+            styled_strategy = highlight_outliers_in_monthly_table(strategy_monthly_table)
+
+            st.dataframe(
+                styled_strategy,
+                hide_index=True,
+                use_container_width=True,
+                height=400
+            )
+
+        with col2:
+            st.caption(f"**{benchmark_name}**")
+            benchmark_monthly_table = create_monthly_returns_table(benchmark_returns)
+            styled_benchmark = highlight_outliers_in_monthly_table(benchmark_monthly_table)
+
+            st.dataframe(
+                styled_benchmark,
+                hide_index=True,
+                use_container_width=True,
+                height=400
+            )
+
+        # Add third column for comparison fund if toggle is ON
+        if comparison_returns is not None and show_comp_in_section:
+            with col3:
+                st.caption(f"**{comparison_name}**")
+                comparison_monthly_table = create_monthly_returns_table(comparison_returns)
+                styled_comparison = highlight_outliers_in_monthly_table(comparison_monthly_table)
+
+                st.dataframe(
+                    styled_comparison,
+                    hide_index=True,
+                    use_container_width=True,
+                    height=400
+                )
 
     # Footer
     st.markdown("---")
