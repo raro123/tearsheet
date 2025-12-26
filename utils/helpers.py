@@ -324,3 +324,66 @@ def highlight_outliers_in_monthly_table(monthly_table_df):
     styled_df = styled_df.format({col: '{:.2f}' for col in all_numeric_cols})
 
     return styled_df
+
+def format_sip_table(sip_df):
+    """Format SIP progression table for display
+
+    Args:
+        sip_df: DataFrame from create_sip_progression_table()
+
+    Returns:
+        Styled DataFrame with proper formatting
+    """
+    import pandas as pd
+
+    n_rows = len(sip_df)
+
+    # Define format functions
+    def format_currency(val):
+        """Format as currency with rupee symbol"""
+        if pd.isna(val) or val == '':
+            return ''
+        if isinstance(val, (int, float)):
+            return f"₹{val:,.2f}"
+        return val
+
+    def format_percentage(val):
+        """Format as percentage"""
+        if pd.isna(val) or val == '':
+            return ''
+        if isinstance(val, (int, float)):
+            return f"{val:.2f}%"
+        return val
+
+    # Create styling function for footer rows
+    def highlight_footer_rows(row):
+        """Highlight TOTAL and IRR rows"""
+        idx = row.name
+        if idx == n_rows - 2:  # TOTAL row
+            return ['background-color: #f3f4f6; font-weight: bold'] * len(row)
+        elif idx == n_rows - 1:  # IRR row
+            return ['background-color: #e5e7eb; font-weight: bold; font-style: italic'] * len(row)
+        else:
+            return [''] * len(row)
+
+    # Apply styling
+    styled = sip_df.style
+
+    # Format Period column (no formatting needed)
+    # Format Invested column (currency for all except IRR row)
+    if 'Invested' in sip_df.columns:
+        styled = styled.format({
+            'Invested': lambda val, idx=None: '' if idx == n_rows - 1 else format_currency(val)
+        })
+
+    # Format value columns (currency for regular rows, percentage for IRR row)
+    value_cols = [col for col in sip_df.columns if col not in ['Period', 'Invested']]
+    for col in value_cols:
+        styled = styled.format({
+            col: lambda val, idx=None: format_percentage(val) if idx == n_rows - 1 else format_currency(val)
+        })
+
+    # Apply row highlighting
+    styled = styled.apply(highlight_footer_rows, axis=1)
+
+    return styled

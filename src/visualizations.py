@@ -3309,3 +3309,139 @@ def create_comparison_metrics_table(strategy_metrics, benchmark_name,
 
     df = pd.DataFrame(data)
     return df
+
+def create_sip_progression_chart(sip_table_df, strategy_name, benchmark_name, comparison_name=None):
+    """Create SIP progression chart showing portfolio values over time with IRR annotations
+
+    Args:
+        sip_table_df: DataFrame from create_sip_progression_table()
+        strategy_name: Name of main fund
+        benchmark_name: Name of benchmark
+        comparison_name: Optional name of comparison fund
+
+    Returns:
+        Plotly figure
+    """
+    # Remove footer rows (TOTAL and IRR)
+    chart_df = sip_table_df.iloc[:-2].copy()
+
+    # Convert Period to datetime for proper x-axis
+    chart_df['Date'] = pd.to_datetime(chart_df['Period'] + '-01')
+
+    # Create figure
+    fig = go.Figure()
+
+    # Add invested amount line (reference line, dashed)
+    fig.add_trace(go.Scatter(
+        x=chart_df['Date'],
+        y=chart_df['Invested'],
+        name='Amount Invested',
+        line=dict(color='#9CA3AF', width=2, dash='dash'),
+        hovertemplate='Invested: ₹%{y:,.2f}<extra></extra>'
+    ))
+
+    # Add fund value line
+    fig.add_trace(go.Scatter(
+        x=chart_df['Date'],
+        y=chart_df['Fund Value'],
+        name=strategy_name,
+        line=dict(color='#f59e0b', width=3),
+        hovertemplate=f'{strategy_name}: ₹%{{y:,.2f}}<extra></extra>'
+    ))
+
+    # Add benchmark value line
+    fig.add_trace(go.Scatter(
+        x=chart_df['Date'],
+        y=chart_df['Benchmark Value'],
+        name=benchmark_name,
+        line=dict(color='#6B7280', width=3),
+        hovertemplate=f'{benchmark_name}: ₹%{{y:,.2f}}<extra></extra>'
+    ))
+
+    # Add comparison value line if present
+    if 'Comp Value' in chart_df.columns and comparison_name:
+        fig.add_trace(go.Scatter(
+            x=chart_df['Date'],
+            y=chart_df['Comp Value'],
+            name=comparison_name,
+            line=dict(color='#10b981', width=3),
+            hovertemplate=f'{comparison_name}: ₹%{{y:,.2f}}<extra></extra>'
+        ))
+
+    # Extract IRR and final values from table
+    irr_row = sip_table_df.iloc[-1]
+    total_row = sip_table_df.iloc[-2]
+
+    # Build single annotation text with all IRRs and final amounts
+    annotation_lines = ['<b>IRR % | Final Amount</b>']
+
+    # Fund
+    fund_irr = irr_row['Fund Value']
+    fund_final = total_row['Fund Value']
+    if pd.notna(fund_irr) and fund_irr != '':
+        annotation_lines.append(
+            f'<span style="color:#f59e0b">{fund_irr:.1f}% | ₹{fund_final:,.0f}</span>'
+        )
+
+    # Benchmark
+    benchmark_irr = irr_row['Benchmark Value']
+    benchmark_final = total_row['Benchmark Value']
+    if pd.notna(benchmark_irr) and benchmark_irr != '':
+        annotation_lines.append(
+            f'<span style="color:#6B7280">{benchmark_irr:.1f}% | ₹{benchmark_final:,.0f}</span>'
+        )
+
+    # Comparison
+    if 'Comp Value' in irr_row and comparison_name:
+        comp_irr = irr_row['Comp Value']
+        comp_final = total_row['Comp Value']
+        if pd.notna(comp_irr) and comp_irr != '':
+            annotation_lines.append(
+                f'<span style="color:#10b981">{comp_irr:.1f}% | ₹{comp_final:,.0f}</span>'
+            )
+
+    # Create single annotation box (left aligned)
+    annotation_text = '<br>'.join(annotation_lines)
+    annotations = [
+        dict(
+            x=0.02, y=0.98,
+            xref='paper', yref='paper',
+            text=annotation_text,
+            showarrow=False,
+            xanchor='left',
+            yanchor='top',
+            font=dict(size=11),
+            bgcolor='rgba(255, 255, 255, 0.9)',
+            bordercolor='#D1D5DB',
+            borderwidth=1,
+            borderpad=8,
+            align='left'
+        )
+    ]
+
+    # Update layout
+    fig.update_layout(
+        title="SIP Portfolio Growth (₹100/month)",
+        xaxis_title="Date",
+        yaxis_title="Amount (₹)",
+        template='plotly_white',
+        hovermode='x unified',
+        height=500,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5
+        ),
+        annotations=annotations,
+        margin=dict(t=120, b=80, l=80, r=80)
+    )
+
+    # Format y-axis as currency
+    fig.update_yaxes(
+        tickformat='₹,.0f',
+        side='right'
+    )
+
+    return fig

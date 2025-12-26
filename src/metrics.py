@@ -231,3 +231,122 @@ def calculate_all_metrics(returns, benchmark_returns=None, risk_free_rate=0.0249
                 metrics['Alpha'] = alpha
 
     return metrics
+
+def create_sip_progression_table(strategy_returns, benchmark_returns,
+                                  comparison_returns=None, monthly_investment=100):
+    """Create SIP progression table with monthly investment tracking
+
+    Args:
+        strategy_returns: Series with main fund daily returns
+        benchmark_returns: Series with benchmark daily returns
+        comparison_returns: Optional Series with comparison fund returns
+        monthly_investment: Monthly investment amount (default 100)
+
+    Returns:
+        DataFrame with columns: Period, Invested, Fund Value, Benchmark Value, [Comp Value]
+        Plus two footer rows: TOTAL and IRR (%)
+    """
+    from scipy.optimize import newton
+
+    # 1. Resample all returns to monthly frequency
+    strategy_monthly = strategy_returns.dropna().resample('ME').apply(lambda x: (1 + x).prod() - 1)
+    benchmark_monthly = benchmark_returns.dropna().resample('ME').apply(lambda x: (1 + x).prod() - 1)
+
+    if comparison_returns is not None:
+        comparison_monthly = comparison_returns.dropna().resample('ME').apply(lambda x: (1 + x).prod() - 1)
+    else:
+        comparison_monthly = None
+
+    # 2. Align all series to same date range
+    if comparison_monthly is not None:
+        # Align all three
+        strategy_monthly, benchmark_monthly = strategy_monthly.align(benchmark_monthly, join='inner')
+        strategy_monthly, comparison_monthly = strategy_monthly.align(comparison_monthly, join='inner')
+        benchmark_monthly = benchmark_monthly.loc[strategy_monthly.index]
+    else:
+        # Align just two
+        strategy_monthly, benchmark_monthly = strategy_monthly.align(benchmark_monthly, join='inner')
+
+    # 3. Calculate SIP progression
+    n_months = len(strategy_monthly)
+
+    # Initialize tracking arrays
+    data = []
+
+    strategy_portfolio = 0
+    benchmark_portfolio = 0
+    comparison_portfolio = 0 if comparison_monthly is not None else None
+
+    for i, date in enumerate(strategy_monthly.index):
+        # Add monthly investment at start of month
+        cumulative_invested = (i + 1) * monthly_investment
+
+        # Apply returns to portfolios
+        strategy_portfolio += monthly_investment
+        strategy_portfolio *= (1 + strategy_monthly.iloc[i])
+
+        benchmark_portfolio += monthly_investment
+        benchmark_portfolio *= (1 + benchmark_monthly.iloc[i])
+
+        if comparison_monthly is not None:
+            comparison_portfolio += monthly_investment
+            comparison_portfolio *= (1 + comparison_monthly.iloc[i])
+
+        # Build row
+        row = {
+            'Period': date.strftime('%Y-%m'),
+            'Invested': cumulative_invested,
+            'Fund Value': strategy_portfolio,
+            'Benchmark Value': benchmark_portfolio
+        }
+
+        if comparison_monthly is not None:
+            row['Comp Value'] = comparison_portfolio
+
+        data.append(row)
+
+    # 4. Create DataFrame
+    df = pd.DataFrame(data)
+
+    # 5. Calculate IRR for each investment
+    def calculate_irr(portfolio_value, months_invested):
+        """Calculate annualized IRR"""
+        total_invested = months_invested * monthly_investment
+        cash_flows = np.full(months_invested + 1, -monthly_investment, dtype=float)
+        cash_flows[-1] = portfolio_value
+
+        try:
+            def npv(rate, cash_flows):
+                return sum(cf / (1 + rate) ** i for i, cf in enumerate(cash_flows))
+
+            monthly_irr = newton(lambda r: npv(r, cash_flows), x0=0.01, maxiter=100)
+            annual_irr = (1 + monthly_irr) ** 12 - 1
+            return annual_irr * 100  # Return as percentage
+        except (RuntimeError, ValueError):
+            return None
+
+    # 6. Add TOTAL row
+    total_row = {
+        'Period': 'TOTAL',
+        'Invested': n_months * monthly_investment,
+        'Fund Value': strategy_portfolio,
+        'Benchmark Value': benchmark_portfolio
+    }
+    if comparison_monthly is not None:
+        total_row['Comp Value'] = comparison_portfolio
+
+    df = pd.concat([df, pd.DataFrame([total_row])], ignore_index=True)
+
+    # 7. Add IRR row
+    irr_row = {
+        'Period': 'IRR (%)',
+        'Invested': '',
+        'Fund Value': calculate_irr(strategy_portfolio, n_months),
+        'Benchmark Value': calculate_irr(benchmark_portfolio, n_months)
+    }
+    if comparison_monthly is not None:
+        irr_row['Comp Value'] = calculate_irr(comparison_portfolio, n_months)
+
+    df = pd.concat([df, pd.DataFrame([irr_row])], ignore_index=True)
+
+    return df

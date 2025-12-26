@@ -7,7 +7,7 @@ import streamlit as st
 import pandas as pd
 import hashlib
 from src.data_loader import calculate_returns
-from src.metrics import calculate_all_metrics
+from src.metrics import calculate_all_metrics, create_sip_progression_table
 from src.computation_cache import (
     get_cached_metrics,
     get_cached_annual_returns,
@@ -25,9 +25,10 @@ from src.visualizations import (
     create_monthly_returns_scatter,
     create_comparison_metrics_table,
     create_performance_overview_subplot,
-    create_rolling_analysis_subplot
+    create_rolling_analysis_subplot,
+    create_sip_progression_chart
 )
-from utils.helpers import create_metrics_comparison_df, get_period_description, create_metric_category_df, highlight_outliers_in_monthly_table
+from utils.helpers import create_metrics_comparison_df, get_period_description, create_metric_category_df, highlight_outliers_in_monthly_table, format_sip_table
 from src.shared_components import filter_funds_by_plan_type
 
 
@@ -366,6 +367,20 @@ def render(data_loader):
         comparison_name = None
         comparison_metrics = None
 
+    # Calculate SIP table for IRR extraction (used in KPI and chart later)
+    sip_table_df = create_sip_progression_table(
+        strategy_returns,
+        benchmark_returns,
+        comparison_returns,
+        monthly_investment=100
+    )
+
+    # Extract IRR values from SIP table (last row)
+    irr_row = sip_table_df.iloc[-1]
+    fund_irr = irr_row['Fund Value']
+    benchmark_irr = irr_row['Benchmark Value']
+    comparison_irr = irr_row['Comp Value'] if 'Comp Value' in irr_row and comparison_returns is not None else None
+
     # === SECTION 1: PERFORMANCE SUMMARY ===
     # Dynamic header based on comparison fund selection
     if comparison_returns is not None:
@@ -373,21 +388,20 @@ def render(data_loader):
     else:
         st.caption(f"📊 **{strategy_name}** vs **{benchmark_name}** | Period: {start_date} to {end_date} ({period_desc})")
 
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
 
     with col1:
         st.metric(
-            "Total Return",
-            f"{strategy_metrics['Cumulative Return']*100:.1f}%",
-            delta=f"{(strategy_metrics['Cumulative Return'] - benchmark_metrics['Cumulative Return'])*100:.1f}% vs BM",
-            help="Total cumulative return over the period"
+            "IRR",
+            f"{fund_irr:.1f}%",
+            delta=f"{(fund_irr - benchmark_irr):.1f}% vs BM",
+            help="Internal Rate of Return (annualized) for ₹100/month SIP"
         )
-        if comparison_returns is not None:
-            delta_cf = (strategy_metrics['Cumulative Return'] - comparison_metrics['Cumulative Return'])*100
+        if comparison_returns is not None and comparison_irr is not None:
             st.metric(
                 label="",
                 value="",
-                delta=f"{delta_cf:.1f}% vs CF",
+                delta=f"{(fund_irr - comparison_irr):.1f}% vs CF",
                 label_visibility="collapsed"
             )
 
@@ -409,6 +423,22 @@ def render(data_loader):
 
     with col3:
         st.metric(
+            "Total Return",
+            f"{strategy_metrics['Cumulative Return']*100:.1f}%",
+            delta=f"{(strategy_metrics['Cumulative Return'] - benchmark_metrics['Cumulative Return'])*100:.1f}% vs BM",
+            help="Total cumulative return over the period"
+        )
+        if comparison_returns is not None:
+            delta_cf = (strategy_metrics['Cumulative Return'] - comparison_metrics['Cumulative Return'])*100
+            st.metric(
+                label="",
+                value="",
+                delta=f"{delta_cf:.1f}% vs CF",
+                label_visibility="collapsed"
+            )
+
+    with col4:
+        st.metric(
             "Sharpe Ratio",
             f"{strategy_metrics['Sharpe Ratio']:.2f}",
             delta=f"{strategy_metrics['Sharpe Ratio'] - benchmark_metrics['Sharpe Ratio']:.2f} vs BM",
@@ -423,7 +453,7 @@ def render(data_loader):
                 label_visibility="collapsed"
             )
 
-    with col4:
+    with col5:
         st.metric(
             "Max Drawdown",
             f"{strategy_metrics['Max Drawdown']*100:.1f}%",
@@ -441,7 +471,7 @@ def render(data_loader):
                 label_visibility="collapsed"
             )
 
-    with col5:
+    with col6:
         st.metric(
             "Volatility",
             f"{strategy_metrics['Volatility (ann.)']*100:.1f}%",
@@ -464,6 +494,15 @@ def render(data_loader):
     # === SECTION 2A: PERFORMANCE OVERVIEW ===
     # Log scale toggle
     log_scale = st.toggle("Log Scale for Cumulative Returns", value=True, key="fd_log_scale")
+
+    # SIP Progression Chart (using pre-calculated sip_table_df from KPI section)
+    sip_chart = create_sip_progression_chart(
+        sip_table_df,
+        strategy_name,
+        benchmark_name,
+        comparison_name
+    )
+    st.plotly_chart(sip_chart, use_container_width=True)
 
     # Single subplot with cumulative returns, drawdown, and annual returns
     st.plotly_chart(
