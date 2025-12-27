@@ -61,6 +61,11 @@ class R2DataLoader:
                 'account_id': get_env_or_secret('R2_ACCOUNT_ID', ['r2', 'account_id'])
             }
 
+            # Validate required config
+            missing_keys = [k for k, v in r2_config.items() if not v and k != 'region']
+            if missing_keys:
+                raise ValueError(f"Missing R2 configuration: {', '.join(missing_keys)}. Please check your secrets configuration.")
+
             # Clean endpoint URL - remove protocol if present
             if r2_config['endpoint']:
                 endpoint = r2_config['endpoint'].replace('https://', '').replace('http://', '')
@@ -116,7 +121,19 @@ class R2DataLoader:
             metadata_path = get_env_or_secret('R2_MF_METADATA_PATH', ['data', 'metadata_path'])
             benchmark_path = get_env_or_secret('R2_MF_BENCHMARK_DATA_PATH', ['data', 'benchmark_data_path'])
 
+            # Validate data paths
+            if not bucket:
+                raise ValueError("R2_BUCKET_NAME not configured. Please check your secrets.")
+            if not data_path:
+                raise ValueError("R2_NAV_DATA_PATH not configured. Please check your secrets.")
+            if not metadata_path:
+                raise ValueError("R2_MF_METADATA_PATH not configured. Please check your secrets.")
+            if not benchmark_path:
+                raise ValueError("R2_MF_BENCHMARK_DATA_PATH not configured. Please check your secrets.")
+
             print(f"Loading data from R2 (cache TTL: {cache_ttl_hours} hours)...")
+            print(f"Bucket: {bucket}")
+            print(f"NAV data path: {data_path}")
 
             # Create tables from R2 parquet files
             _self.conn.execute(f"""
