@@ -5,8 +5,35 @@ import os
 from datetime import datetime, date
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables (only if .env exists - for local development)
+if os.path.exists('.env'):
+    load_dotenv()
+
+def get_env_or_secret(key: str, secret_path: list = None):
+    """Get value from environment variable or Streamlit secrets
+
+    Args:
+        key: Environment variable name
+        secret_path: Path in st.secrets (e.g., ['r2', 'access_key_id'])
+
+    Returns:
+        Value from environment variable or Streamlit secrets, or None if not found
+    """
+    # Try environment variable first (local dev)
+    value = os.getenv(key)
+    if value:
+        return value
+
+    # Try Streamlit secrets (cloud deployment)
+    try:
+        if secret_path:
+            obj = st.secrets
+            for part in secret_path:
+                obj = obj[part]
+            return obj
+        return st.secrets.get(key)
+    except (KeyError, AttributeError, FileNotFoundError):
+        return None
 
 class R2DataLoader:
     """Data loader for Cloudflare R2 using DuckDB"""
@@ -27,11 +54,11 @@ class R2DataLoader:
 
             # Configure R2 connection
             r2_config = {
-                'key_id': os.getenv('R2_ACCESS_KEY_ID'),
-                'secret': os.getenv('R2_SECRET_ACCESS_KEY'),
-                'endpoint': os.getenv('R2_ENDPOINT_URL'),
-                'region': os.getenv('R2_REGION', 'auto'),
-                'account_id': os.getenv('R2_ACCOUNT_ID')
+                'key_id': get_env_or_secret('R2_ACCESS_KEY_ID', ['r2', 'access_key_id']),
+                'secret': get_env_or_secret('R2_SECRET_ACCESS_KEY', ['r2', 'secret_access_key']),
+                'endpoint': get_env_or_secret('R2_ENDPOINT_URL', ['r2', 'endpoint_url']),
+                'region': get_env_or_secret('R2_REGION', ['r2', 'region']) or 'auto',
+                'account_id': get_env_or_secret('R2_ACCOUNT_ID', ['r2', 'account_id'])
             }
 
             # Clean endpoint URL - remove protocol if present
@@ -61,8 +88,8 @@ class R2DataLoader:
             return False, "No connection established"
 
         try:
-            bucket = os.getenv('R2_BUCKET_NAME')
-            data_path = os.getenv('R2_NAV_DATA_PATH')
+            bucket = get_env_or_secret('R2_BUCKET_NAME', ['r2', 'bucket_name'])
+            data_path = get_env_or_secret('R2_NAV_DATA_PATH', ['data', 'nav_data_path'])
             test_query = f"SELECT COUNT(*) FROM 's3://{bucket}/{data_path}' LIMIT 1;"
             self.conn.execute(test_query)
             return True, "Connection successful"
@@ -82,12 +109,12 @@ class R2DataLoader:
 
         try:
             # Get cache TTL from environment (in hours), default 24 hours
-            cache_ttl_hours = int(os.getenv('CACHE_TTL_HOURS', '24'))
+            cache_ttl_hours = int(get_env_or_secret('CACHE_TTL_HOURS', ['cache', 'ttl_hours']) or '24')
 
-            bucket = os.getenv('R2_BUCKET_NAME')
-            data_path = os.getenv('R2_NAV_DATA_PATH')
-            metadata_path = os.getenv('R2_MF_METADATA_PATH')
-            benchmark_path = os.getenv('R2_MF_BENCHMARK_DATA_PATH')
+            bucket = get_env_or_secret('R2_BUCKET_NAME', ['r2', 'bucket_name'])
+            data_path = get_env_or_secret('R2_NAV_DATA_PATH', ['data', 'nav_data_path'])
+            metadata_path = get_env_or_secret('R2_MF_METADATA_PATH', ['data', 'metadata_path'])
+            benchmark_path = get_env_or_secret('R2_MF_BENCHMARK_DATA_PATH', ['data', 'benchmark_data_path'])
 
             print(f"Loading data from R2 (cache TTL: {cache_ttl_hours} hours)...")
 
