@@ -18,7 +18,7 @@
 
 ```
 fundinvestigator_app.py (Production Entry Point)
-└── pages.fund_deepdive.render()
+└── app_pages.fund_deepdive.render()
     └── session_state.data_loader (R2DataLoader singleton)
 
 Single-page focused analysis:
@@ -39,7 +39,7 @@ wip/app.py (WIP Multi-Page Entry Point)
 └── Navigation
     ├── Page 1: Fund Universe (wip/pages/fund_universe.py)
     ├── Page 2: Category Deepdive ⭐ (wip/pages/category_deepdive.py) - DEFAULT
-    └── Page 3: Fund Deepdive (pages/fund_deepdive.py) - Shared with production
+    └── Page 3: Fund Deepdive (app_pages/fund_deepdive.py) - Shared with production
 ```
 
 ### Shared Data Layer (src/)

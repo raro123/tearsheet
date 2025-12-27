@@ -60,7 +60,7 @@ uv run ruff check .
    - Comprehensive analysis: SIP progression, integrated 4-row performance overview, rolling metrics, scatter plots, monthly/annual returns
    - Sidebar filtering: Plan type, categories (L1/L2), fund selection, benchmark selection, date range, parameters
 
-3. **Fund Deepdive Page** (pages/fund_deepdive.py): Core analysis functionality
+3. **Fund Deepdive Page** (app_pages/fund_deepdive.py): Core analysis functionality
    - Comprehensive single-fund performance analysis (728 lines)
    - Integrated visualizations:
      - Section 1: KPI cards with SIP analysis table
@@ -149,7 +149,7 @@ CACHE_TTL_HOURS=24  # Data cache TTL in hours (default: 24)
 
 ### Production Code (actively maintained)
 - `fundinvestigator_app.py` - Main production entry point
-- `pages/fund_deepdive.py` - Core analysis page (728 lines)
+- `app_pages/fund_deepdive.py` - Core analysis page (728 lines)
 - `src/` - All data, metrics, visualization, caching modules
 - `utils/` - Helper functions
 

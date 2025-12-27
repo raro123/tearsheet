@@ -8,9 +8,9 @@ import streamlit as st
 from src.data_loader import get_data_loader
 
 # Import page modules
-import pages.fund_universe as page_fund_universe
-import pages.category_deepdive as page_category_deepdive
-import pages.fund_deepdive as page_fund_deepdive
+import wip.pages.fund_universe as page_fund_universe
+import wip.pages.category_deepdive as page_category_deepdive
+import app_pages.fund_deepdive as page_fund_deepdive
 
 # Page configuration
 st.set_page_config(

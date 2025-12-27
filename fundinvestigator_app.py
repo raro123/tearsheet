@@ -6,7 +6,7 @@ with interactive visualizations, metrics comparison, and SIP calculations.
 """
 import streamlit as st
 from src.data_loader import get_data_loader
-import pages.fund_deepdive as page_fund_deepdive
+import app_pages.fund_deepdive as page_fund_deepdive
 
 # Page configuration
 st.set_page_config(

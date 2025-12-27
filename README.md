@@ -103,7 +103,7 @@ fund-investigator/
 ├── .python-version          # Python version specification (3.11)
 ├── .env                     # R2 credentials (not committed)
 │
-├── pages/
+├── app_pages/
 │   ├── fund_deepdive.py     # Core single-fund analysis page
 │   └── __init__.py
 │
