@@ -11,9 +11,7 @@ from src.metrics import calculate_all_metrics, create_sip_progression_table
 from src.computation_cache import (
     get_cached_metrics,
     get_cached_annual_returns,
-    get_cached_monthly_returns,
-    get_cache_stats,
-    clear_cache_on_data_change
+    get_cached_monthly_returns
 )
 from src.visualizations import (
     create_cumulative_returns_chart,
@@ -278,28 +276,6 @@ def render(data_loader):
             help="Apply logarithmic scale to cumulative returns chart",
             key="fd_log_scale"
         )
-
-        st.markdown("---")
-
-        # Cache monitoring and control
-        st.subheader("🔍 Performance Monitor")
-
-        # Display cache stats
-        cache_stats = get_cache_stats()
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Metrics Cached", cache_stats['metrics_entries'])
-            st.metric("Annual Returns", cache_stats['annual_returns_entries'])
-        with col2:
-            st.metric("Monthly Returns", cache_stats['monthly_returns_entries'])
-            st.metric("Total Entries", cache_stats['total_entries'])
-
-        # Clear cache button
-        if st.button("🔄 Clear Cache", help="Clear all cached computations", key="fd_clear_cache"):
-            clear_cache_on_data_change()
-            st.cache_data.clear()
-            st.success("✅ Cache cleared!")
-            st.rerun()
 
     # Load data
     with st.spinner("Loading data from R2..."):
