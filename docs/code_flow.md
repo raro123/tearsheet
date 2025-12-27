@@ -1,4 +1,4 @@
-# Mutual Fund Analysis Platform - Code Flow Documentation
+# Fund Investigator - Code Flow Documentation
 
 ## Table of Contents
 1. [Application Architecture](#application-architecture)
@@ -14,20 +14,48 @@
 
 ## 1. Application Architecture
 
+### Production (Fund Investigator)
+
 ```
-app.py (Entry Point)
+fundinvestigator_app.py (Production Entry Point)
+└── pages.fund_deepdive.render()
+    └── session_state.data_loader (R2DataLoader singleton)
+
+Single-page focused analysis:
+- Fund Deepdive: Comprehensive single-fund performance analysis
+  - SIP calculations with IRR
+  - Integrated 4-row performance overview
+  - Rolling metrics analysis
+  - Monthly/annual returns analysis
+```
+
+### Work in Progress (Multi-Page App)
+
+Located in `/wip/` directory for future development:
+
+```
+wip/app.py (WIP Multi-Page Entry Point)
 ├── session_state.data_loader (R2DataLoader singleton)
 └── Navigation
-    ├── Page 1: Fund Universe
-    ├── Page 2: Category Deepdive ⭐ (DEFAULT)
-    └── Page 3: Fund Deepdive
+    ├── Page 1: Fund Universe (wip/pages/fund_universe.py)
+    ├── Page 2: Category Deepdive ⭐ (wip/pages/category_deepdive.py) - DEFAULT
+    └── Page 3: Fund Deepdive (pages/fund_deepdive.py) - Shared with production
+```
 
-Data Layer (src/)
+### Shared Data Layer (src/)
+
+Used by both production and WIP apps:
+
+```
+src/
 ├── data_loader.py (R2DataLoader class)
 ├── metrics.py (Performance calculations)
-├── visualizations.py (Plotly chart functions)
+├── visualizations.py (Plotly chart functions - 30+ functions)
+├── computation_cache.py (Session-based caching - 60% perf improvement)
 └── shared_components.py (Reusable UI widgets)
 ```
+
+**Note**: The remainder of this document describes the multi-page architecture (in `/wip/`). The production Fund Investigator app uses the same data layer and components but with a simplified single-page structure.
 
 ---
 
