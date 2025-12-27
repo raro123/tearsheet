@@ -60,19 +60,18 @@ cp .env.example .env
 Create a `.env` file in the project root with your Cloudflare R2 credentials:
 
 ```env
-# R2 Connection
+# R2 Connection (used by mktdata)
 R2_ACCESS_KEY_ID=your_access_key
 R2_SECRET_ACCESS_KEY=your_secret_key
 R2_ENDPOINT_URL=your_account_id.r2.cloudflarestorage.com
 R2_REGION=auto
 R2_ACCOUNT_ID=your_account_id
 R2_BUCKET_NAME=your_bucket_name
-R2_NAV_DATA_PATH=path/to/nav_data.parquet
-R2_MF_METADATA_PATH=path/to/metadata.parquet
-R2_MF_BENCHMARK_DATA_PATH=path/to/benchmark_data.parquet
 
 # Cache Configuration
 CACHE_TTL_HOURS=24  # Data cache TTL in hours (default: 24)
+
+# Note: R2 parquet file paths are configured in ~/.mktdata/config.yaml
 ```
 
 ## Usage
@@ -147,30 +146,35 @@ fund-investigator/
 
 ## Data Architecture
 
-Fund Investigator loads data directly from Cloudflare R2 (S3-compatible) using DuckDB's httpfs extension:
+Fund Investigator loads data from Cloudflare R2 using the mktdata package:
 
 1. **R2 Storage**: Parquet files stored in Cloudflare R2 bucket
-2. **DuckDB Loading**: Direct parquet file reading via httpfs
-3. **In-Memory Tables**: Data loaded into DuckDB in-memory database
-4. **Caching**: 24-hour TTL with automatic refresh (configurable)
-5. **Format Conversion**: Long-format data pivoted to wide format for analysis
+2. **Mktdata Catalog**: Unified data catalog managed via ~/.mktdata/config.yaml
+3. **DuckDB Queries**: SQL-like queries via mktdata.query()
+4. **In-Memory Processing**: Data loaded into pandas DataFrames
+5. **Caching**: 24-hour TTL with automatic refresh (configurable)
+6. **Format Conversion**: Long-format data pivoted to wide format for analysis
 
 ### Data Schema
 
-**mf_nav_daily_long** (NAV data in long format):
+**mf_nav_daily** (NAV data in long format):
 - `date`: datetime
 - `scheme_code`: string
 - `scheme_name`: string
 - `nav`: float
 
-**mf_scheme_metadata** (Fund metadata):
+**mf_schemes** (Fund metadata):
 - `scheme_code`: string
 - `scheme_name`: string
 - `scheme_category_level1`: string (e.g., "Equity")
 - `scheme_category_level2`: string (e.g., "Large Cap")
 
-**mf_benchmark_daily_long** (Benchmark data in long format):
-- Similar structure to NAV data
+**mf_benhcmark_daily** (Benchmark data):
+- `index_name`: string
+- `date`: datetime
+- `close`: float (closing value)
+- `index_type`: string (e.g., "PRICE")
+- `index_category`: string (e.g., "BROAD", "SECTORAL")
 
 ## Configuration
 

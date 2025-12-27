@@ -45,9 +45,10 @@ uv run ruff check .
 ## Architecture
 
 ### Data Flow
-1. **R2DataLoader** (src/data_loader.py): Connects to Cloudflare R2 via DuckDB, creates in-memory tables from parquet files
-   - Uses DuckDB's httpfs extension with S3-compatible R2 API
-   - Loads `mf_nav_daily_long` (NAV data in long format), `mf_scheme_metadata`, and `mf_benchmark_daily_long` tables
+1. **MktDataLoader** (src/data_loader.py): Connects to Cloudflare R2 via mktdata package
+   - Uses mktdata's unified catalog system with DuckDB backend
+   - Loads `mf_nav_daily`, `mf_schemes`, and `mf_benhcmark_daily` tables
+   - Configuration managed via ~/.mktdata/config.yaml
    - Pivots long-format data to wide format for analysis
    - In-memory database with Streamlit caching (24-hour TTL by default)
    - Auto-refresh: Data automatically reloads from R2 after cache expires
@@ -108,19 +109,18 @@ uv run ruff check .
 
 The application requires R2 credentials and configuration in a `.env` file:
 ```
-# R2 Connection
+# R2 Connection (used by mktdata)
 R2_ACCESS_KEY_ID=your_access_key
 R2_SECRET_ACCESS_KEY=your_secret_key
 R2_ENDPOINT_URL=your_account_id.r2.cloudflarestorage.com
 R2_REGION=auto
 R2_ACCOUNT_ID=your_account_id
 R2_BUCKET_NAME=your_bucket_name
-R2_NAV_DATA_PATH=path/to/nav_data.parquet
-R2_MF_METADATA_PATH=path/to/metadata.parquet
-R2_MF_BENCHMARK_DATA_PATH=path/to/benchmark_data.parquet
 
 # Cache Configuration
 CACHE_TTL_HOURS=24  # Data cache TTL in hours (default: 24)
+
+# Note: R2 parquet file paths are configured in ~/.mktdata/config.yaml
 ```
 
 ### Constants

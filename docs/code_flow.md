@@ -19,7 +19,7 @@
 ```
 fundinvestigator_app.py (Production Entry Point)
 └── app_pages.fund_deepdive.render()
-    └── session_state.data_loader (R2DataLoader singleton)
+    └── session_state.data_loader (MktDataLoader singleton)
 
 Single-page focused analysis:
 - Fund Deepdive: Comprehensive single-fund performance analysis
@@ -35,7 +35,7 @@ Located in `/wip/` directory for future development:
 
 ```
 wip/app.py (WIP Multi-Page Entry Point)
-├── session_state.data_loader (R2DataLoader singleton)
+├── session_state.data_loader (MktDataLoader singleton)
 └── Navigation
     ├── Page 1: Fund Universe (wip/pages/fund_universe.py)
     ├── Page 2: Category Deepdive ⭐ (wip/pages/category_deepdive.py) - DEFAULT
@@ -48,7 +48,7 @@ Used by both production and WIP apps:
 
 ```
 src/
-├── data_loader.py (R2DataLoader class)
+├── data_loader.py (MktDataLoader class)
 ├── metrics.py (Performance calculations)
 ├── visualizations.py (Plotly chart functions - 30+ functions)
 ├── computation_cache.py (Session-based caching - 60% perf improvement)
@@ -72,7 +72,7 @@ src/
 2. Apply custom CSS
 3. Initialize data loader (singleton pattern):
    ├── Check if 'data_loader' exists in st.session_state
-   ├── If not: Create R2DataLoader instance
+   ├── If not: Create MktDataLoader instance
    ├── Call create_db_tables() to load data from R2
    └── Store in st.session_state for cross-page access
 4. Create navigation with 3 pages
@@ -83,7 +83,7 @@ src/
 ```python
 # Lines 41-48: Singleton initialization
 if 'data_loader' not in st.session_state:
-    data_loader = get_data_loader()  # Creates R2DataLoader
+    data_loader = get_data_loader()  # Creates MktDataLoader
     data_loader.create_db_tables()   # Loads data from R2
     st.session_state.data_loader = data_loader
 
@@ -533,7 +533,7 @@ Flow:
 **Cache Flow**:
 ```
 App Start
-├── @st.cache_resource: Create R2DataLoader (once per deployment)
+├── @st.cache_resource: Create MktDataLoader (once per deployment)
 ├── @st.cache_resource(ttl=24h): Load R2 data into DuckDB (refreshes daily)
 └── @st.cache_data: Query results (per unique parameter set)
 ```
@@ -558,7 +558,7 @@ Charts & Tables (UI)
 
 **Session State Usage**:
 ```python
-st.session_state.data_loader  # Shared R2DataLoader instance
+st.session_state.data_loader  # Shared MktDataLoader instance
 # Widget states managed implicitly by Streamlit with unique keys
 ```
 
