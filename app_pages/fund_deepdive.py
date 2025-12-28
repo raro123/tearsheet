@@ -66,6 +66,11 @@ def render(data_loader):
         # Get all funds
         all_funds = data_loader.get_available_funds()
 
+        # Check if funds are available
+        if all_funds is None or len(all_funds) == 0:
+            st.error("⚠️ No funds available. Please check data connection.")
+            st.stop()
+
         # Plan Type filter
         st.subheader("🏷️ Plan Type")
         plan_type = st.radio(
@@ -118,12 +123,16 @@ def render(data_loader):
                     .query("scheme_category_level1 == @selected_category_level1 and scheme_category_level2 == @selected_category_level2")
                     ['display_name'].tolist())
 
-        selected_fund_scheme = st.selectbox(
-            "Strategy Fund",
-            fund_options,
-            help="Select the fund to analyze",
-            key="fd_fund"
-        )
+        if not fund_options:
+            st.warning("⚠️ No funds match the selected filters. Please try different category filters.")
+            selected_fund_scheme = None
+        else:
+            selected_fund_scheme = st.selectbox(
+                "Strategy Fund",
+                fund_options,
+                help="Select the fund to analyze",
+                key="fd_fund"
+            )
 
         # Benchmark Selection
         st.subheader("📊 Benchmark Selection")
@@ -221,6 +230,11 @@ def render(data_loader):
         st.caption(f"**Benchmark:** {selected_benchmark_index} ({index_type})")
         if enable_comparison and selected_comparison_fund:
             st.caption(f"**Comparison:** {selected_comparison_fund}")
+
+        # Check if fund is selected
+        if not selected_fund_scheme:
+            st.error("⚠️ No fund selected. Please select a fund from the sidebar to begin analysis.")
+            st.stop()
 
         # Date range
         st.subheader("📅 Analysis Period")
