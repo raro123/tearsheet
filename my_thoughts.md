@@ -51,3 +51,20 @@ Rolling analysis:
     Minor updates:
      - in sidebar I see funddeepdive tab and fundinvetigator app tab, this is not needed as we only have one page
       - 
+
+
+    Adding a login option for the app. May be give 5 usage without login and then ask to log in.
+
+    Make changes to color:
+    Main fund - - Navy (Primary):     #1E3A5F
+    Benchmark -- Light Gray:         #94A3B8
+    Comp fund -- - Gold (Accent):      #D4AF37
+
+    incorporate the primary logo on top right - "C:\Users\ishpr\Downloads\files (1)\fundinvestigator-brand-package\brand-package-final\logo-primary.svg"
+
+
+    still need to update:
+     - color scheme on text which is right above kpi section
+     - the fill of area charts
+     - the color of bar chart
+     - the legend below the metric table
