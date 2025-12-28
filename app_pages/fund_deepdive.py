@@ -368,16 +368,16 @@ def render(data_loader):
     # Dynamic header based on comparison fund selection
     if comparison_returns is not None:
         st.caption(
-            f"📊 <span style='color:#f59e0b; font-weight:bold'>{strategy_name}</span> vs "
-            f"<span style='color:#6B7280; font-weight:bold'>{benchmark_name}</span> vs "
-            f"<span style='color:#10b981; font-weight:bold'>{comparison_name}</span> | "
+            f"📊 <span style='color:#1E3A5F; font-weight:bold'>{strategy_name}</span> vs "
+            f"<span style='color:#94A3B8; font-weight:bold'>{benchmark_name}</span> vs "
+            f"<span style='color:#D4AF37; font-weight:bold'>{comparison_name}</span> | "
             f"Period: {start_date} to {end_date} ({period_desc})",
             unsafe_allow_html=True
         )
     else:
         st.caption(
-            f"📊 <span style='color:#f59e0b; font-weight:bold'>{strategy_name}</span> vs "
-            f"<span style='color:#6B7280; font-weight:bold'>{benchmark_name}</span> | "
+            f"📊 <span style='color:#1E3A5F; font-weight:bold'>{strategy_name}</span> vs "
+            f"<span style='color:#94A3B8; font-weight:bold'>{benchmark_name}</span> | "
             f"Period: {start_date} to {end_date} ({period_desc})",
             unsafe_allow_html=True
         )
@@ -540,9 +540,18 @@ def render(data_loader):
 
     # Helper text with color indicators (shown once below all tables)
     if comparison_metrics is not None:
-        st.caption(f"🟠 Main Fund: {strategy_display} | 🔵 Benchmark: {benchmark_display} | 🟢 Comp Fund: {comparison_display}")
+        st.caption(
+            f"<span style='color:#1E3A5F'>●</span> Main Fund: {strategy_display} | "
+            f"<span style='color:#94A3B8'>●</span> Benchmark: {benchmark_display} | "
+            f"<span style='color:#D4AF37'>●</span> Comp Fund: {comparison_display}",
+            unsafe_allow_html=True
+        )
     else:
-        st.caption(f"🟠 Main Fund: {strategy_display} | 🔵 Benchmark: {benchmark_display}")
+        st.caption(
+            f"<span style='color:#1E3A5F'>●</span> Main Fund: {strategy_display} | "
+            f"<span style='color:#94A3B8'>●</span> Benchmark: {benchmark_display}",
+            unsafe_allow_html=True
+        )
 
     # === SECTION 2C: ADDITIONAL CHARTS ===
     st.markdown("---")

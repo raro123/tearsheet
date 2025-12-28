@@ -1,0 +1,14 @@
+<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="50" cy="50" r="48" fill="#1E3A5F"/>
+  
+  <!-- Lens -->
+  <circle cx="46" cy="46" r="28" fill="white" fill-opacity="0.1" stroke="#D4AF37" stroke-width="2"/>
+  
+  <!-- FIN - centered -->
+  <text x="46" y="54" font-family="system-ui, sans-serif" font-size="18" font-weight="700" text-anchor="middle">
+    <tspan fill="white">F</tspan><tspan fill="#D4AF37">I</tspan><tspan fill="white">N</tspan>
+  </text>
+  
+  <!-- Handle - short -->
+  <line x1="66" y1="66" x2="74" y2="74" stroke="#D4AF37" stroke-width="3" stroke-linecap="round"/>
+</svg>

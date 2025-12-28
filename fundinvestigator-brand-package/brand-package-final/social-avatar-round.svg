@@ -1,0 +1,11 @@
+<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="50" cy="50" r="48" fill="#1E3A5F"/>
+  
+  <!-- Lens - perfectly centered -->
+  <circle cx="50" cy="50" r="28" fill="white" fill-opacity="0.1" stroke="#D4AF37" stroke-width="2"/>
+  
+  <!-- FIN - perfectly centered -->
+  <text x="50" y="58" font-family="system-ui, sans-serif" font-size="18" font-weight="700" text-anchor="middle">
+    <tspan fill="white">F</tspan><tspan fill="#D4AF37">I</tspan><tspan fill="white">N</tspan>
+  </text>
+</svg>
