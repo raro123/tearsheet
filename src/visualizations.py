@@ -15,7 +15,7 @@ def create_cumulative_returns_chart(strategy_returns, benchmark_returns, strateg
         x=strategy_cum.index,
         y=(strategy_cum - 1) * 100,
         name=strategy_name,
-        line=dict(color='#f59e0b', width=2),
+        line=dict(color='#1E3A5F', width=2),
         hovertemplate='%{y:.2f}%<extra></extra>'
     ))
     fig.add_trace(go.Scatter(
@@ -101,7 +101,7 @@ def create_drawdown_comparison_chart(strategy_returns, benchmark_returns, strate
         y=strategy_drawdown,
         name=strategy_name,
         fill='tozeroy',
-        line=dict(color='#f59e0b', width=2),
+        line=dict(color='#1E3A5F', width=2),
         fillcolor='rgba(245, 158, 11, 0.3)',
         hovertemplate='%{y:.2f}%<extra></extra>'
     ))
@@ -238,7 +238,7 @@ def create_rolling_sharpe_chart(returns, benchmark_returns, strategy_name, bench
         x=rolling_sharpe.index,
         y=rolling_sharpe,
         name=strategy_name,
-        line=dict(color='#f59e0b', width=2),
+        line=dict(color='#1E3A5F', width=2),
         hovertemplate='%{y:.2f}<extra></extra>'
     ))
     fig.add_trace(go.Scatter(
@@ -273,7 +273,7 @@ def create_log_returns_chart(strategy_returns, benchmark_returns, strategy_name,
         x=strategy_cum.index,
         y=strategy_cum,
         name=strategy_name,
-        line=dict(color='#f59e0b', width=2),
+        line=dict(color='#1E3A5F', width=2),
         hovertemplate='%{y:.2f}<extra></extra>'
     ))
     fig.add_trace(go.Scatter(
@@ -325,7 +325,7 @@ def create_rolling_returns_chart(strategy_returns, benchmark_returns, strategy_n
         x=strategy_rolling.index,
         y=strategy_rolling,
         name=strategy_name,
-        line=dict(color='#f59e0b', width=2),
+        line=dict(color='#1E3A5F', width=2),
         hovertemplate='%{y:.2f}%<extra></extra>'
     ))
 
@@ -429,7 +429,7 @@ def create_rolling_analysis_subplot(strategy_returns, benchmark_returns, strateg
         x=strategy_rolling_returns.dropna().index,
         y=strategy_rolling_returns.dropna(),
         name=strategy_name,
-        line=dict(color='#f59e0b', width=2),
+        line=dict(color='#1E3A5F', width=2),
         hovertemplate='%{y:.2f}%<extra></extra>',
         showlegend=True
     ), row=1, col=1)
@@ -478,7 +478,7 @@ def create_rolling_analysis_subplot(strategy_returns, benchmark_returns, strateg
         x=strategy_rolling_vol.dropna().index,
         y=strategy_rolling_vol.dropna(),
         name=strategy_name,
-        line=dict(color='#f59e0b', width=2),
+        line=dict(color='#1E3A5F', width=2),
         hovertemplate='%{y:.2f}%<extra></extra>',
         showlegend=False
     ), row=1, col=2)
@@ -526,7 +526,7 @@ def create_rolling_analysis_subplot(strategy_returns, benchmark_returns, strateg
         x=strategy_rolling_beta.dropna().index,
         y=strategy_rolling_beta.dropna(),
         name=strategy_name,
-        line=dict(color='#f59e0b', width=2),
+        line=dict(color='#1E3A5F', width=2),
         hovertemplate='%{y:.2f}<extra></extra>',
         showlegend=False
     ), row=2, col=1)
@@ -565,7 +565,7 @@ def create_rolling_analysis_subplot(strategy_returns, benchmark_returns, strateg
         x=strategy_rolling_corr.dropna().index,
         y=strategy_rolling_corr.dropna(),
         name=strategy_name,
-        line=dict(color='#f59e0b', width=2),
+        line=dict(color='#1E3A5F', width=2),
         hovertemplate='%{y:.3f}<extra></extra>',
         showlegend=False
     ), row=2, col=2)
@@ -762,7 +762,7 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
             x=chart_df['Date'],
             y=chart_df['Fund Value'],
             name=strategy_name,
-            line=dict(color='#f59e0b', width=2),
+            line=dict(color='#1E3A5F', width=2),
             hovertemplate=f'{strategy_name}: ₹%{{y:,.2f}}<extra></extra>',
             showlegend=False  # Already in row 2 legend
         ), row=1, col=1)
@@ -804,7 +804,7 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
         fund_final = total_row['Fund Value']
         if pd.notna(fund_irr) and fund_irr != '':
             annotation_lines.append(
-                f'<span style="color:#f59e0b">{fund_irr:.1f}% | ₹{fund_final:,.0f}</span>'
+                f'<span style="color:#1E3A5F">{fund_irr:.1f}% | ₹{fund_final:,.0f}</span>'
             )
 
         # Benchmark
@@ -857,7 +857,7 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
             x=strategy_cum.index,
             y=strategy_cum,
             name=strategy_name,
-            line=dict(color='#f59e0b', width=2),
+            line=dict(color='#1E3A5F', width=2),
             hovertemplate='₹%{y:.2f}<extra></extra>',
             showlegend=True
         ), row=cumulative_row, col=1)
@@ -889,7 +889,7 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
             x=strategy_cum.index,
             y=strategy_cum,
             name=strategy_name,
-            line=dict(color='#f59e0b', width=2),
+            line=dict(color='#1E3A5F', width=2),
             hovertemplate='₹%{y:.2f}<extra></extra>',
             showlegend=True
         ), row=cumulative_row, col=1)
@@ -932,7 +932,7 @@ def create_performance_overview_subplot(strategy_returns, benchmark_returns, str
         y=strategy_drawdown,
         name=strategy_name,
         fill='tozeroy',
-        line=dict(color='#f59e0b', width=2),
+        line=dict(color='#1E3A5F', width=2),
         fillcolor='rgba(245, 158, 11, 0.3)',
         hovertemplate='%{y:.2f}%<extra></extra>',
         showlegend=False
@@ -1065,7 +1065,7 @@ def create_category_equity_curves(returns_dict, benchmark_returns, benchmark_nam
 
     # Color palette for funds
     colors = [
-        '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899',
+        '#1E3A5F', '#ef4444', '#10b981', '#8b5cf6', '#ec4899',
         '#06b6d4', '#f97316', '#84cc16', '#6366f1', '#14b8a6'
     ]
 
@@ -1221,7 +1221,7 @@ def create_annual_returns_bubble_chart(returns_dict, benchmark_returns, benchmar
 
     # Color palette
     colors = [
-        '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899',
+        '#1E3A5F', '#ef4444', '#10b981', '#8b5cf6', '#ec4899',
         '#06b6d4', '#f97316', '#84cc16', '#6366f1', '#14b8a6'
     ]
 
@@ -2110,7 +2110,7 @@ def create_sharpe_distribution(returns_dict, benchmark_returns, start_date, end_
         y=density,
         mode='lines',
         fill='tozeroy',
-        line=dict(color='#f59e0b', width=2),
+        line=dict(color='#1E3A5F', width=2),
         fillcolor='rgba(245, 158, 11, 0.2)',
         name='Distribution',
         hovertemplate='Sharpe: %{x:.2f}<extra></extra>'
@@ -2307,7 +2307,7 @@ def create_bubble_scatter_chart(metrics_df, x_metric, y_metric, size_metric, fun
     # Create color scale based on fund names
     unique_funds = df[fund_name_col].unique()
     color_palette = [
-        '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899',
+        '#1E3A5F', '#ef4444', '#10b981', '#8b5cf6', '#ec4899',
         '#06b6d4', '#f97316', '#84cc16', '#6366f1', '#14b8a6'
     ]
     color_map = {fund: color_palette[i % len(color_palette)] for i, fund in enumerate(unique_funds)}
@@ -2574,7 +2574,7 @@ def create_performance_ranking_grid(returns_dict, benchmark_returns, benchmark_n
                             showarrow=False,
                             font=dict(size=9, color='#1e40af', family='Arial Black'),  # Bold blue font
                             bgcolor='#fef3c7',  # Light yellow background
-                            bordercolor='#f59e0b',  # Orange border
+                            bordercolor='#1E3A5F',  # Orange border
                             borderwidth=2,
                             borderpad=4,
                             xref='x',
@@ -2705,7 +2705,7 @@ def create_rolling_metric_chart(returns_dict, benchmark_returns, benchmark_name,
 
     # Color palette
     colors = [
-        '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899',
+        '#1E3A5F', '#ef4444', '#10b981', '#8b5cf6', '#ec4899',
         '#06b6d4', '#f97316', '#84cc16', '#6366f1', '#14b8a6'
     ]
 
@@ -3264,7 +3264,7 @@ def create_monthly_returns_scatter(strategy_monthly_returns, benchmark_monthly_r
         mode='markers',
         marker=dict(
             size=8,
-            color='#f59e0b',  # Orange for main fund
+            color='#1E3A5F',  # Orange for main fund
             line=dict(width=1, color='white'),
             opacity=0.7
         ),
@@ -3287,7 +3287,7 @@ def create_monthly_returns_scatter(strategy_monthly_returns, benchmark_monthly_r
             y=trendline_y,
             mode='lines',
             name=f'{strategy_name} Trendline',
-            line=dict(color='#f59e0b', width=2, dash='dash'),
+            line=dict(color='#1E3A5F', width=2, dash='dash'),
             showlegend=False,  # Hide from legend (same color as dots)
             hoverinfo='skip'
         ))
