@@ -37,7 +37,7 @@ def render(data_loader):
     """
     # Page header - Custom FundInvestigator header component
     st.markdown("""
-        <div style="display: flex; align-items: center; gap: 24px; padding: 20px 0px 30px 0px;">
+        <div style="display: flex; align-items: center; gap: 24px; padding: 35px 0px 30px 0px;">
             <div style="background-color: #1E3A5F; border-radius: 10px; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(30, 58, 95, 0.2);">
                 <span style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 26px; font-weight: 700; letter-spacing: -1px;">
                     <span style="color: white;">F</span><span style="color: #D4AF37;">I</span><span style="color: white;">N</span>
