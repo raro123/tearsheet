@@ -35,8 +35,24 @@ def render(data_loader):
     Args:
         data_loader: R2DataLoader instance from session state
     """
-    # Page header - compact caption style
-    st.caption("🔍 **Fund Deepdive** | Comprehensive performance analysis for a single fund")
+    # Page header - Custom FundInvestigator header component
+    st.markdown("""
+        <div style="display: flex; align-items: center; gap: 24px; padding: 20px 0px 30px 0px;">
+            <div style="background-color: #1E3A5F; border-radius: 10px; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(30, 58, 95, 0.2);">
+                <span style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 26px; font-weight: 700; letter-spacing: -1px;">
+                    <span style="color: white;">F</span><span style="color: #D4AF37;">I</span><span style="color: white;">N</span>
+                </span>
+            </div>
+            <div style="display: flex; flex-direction: column; line-height: 1.1;">
+                <span style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 36px; font-weight: 700; color: #1E3A5F;">Fund</span>
+                <span style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 22px; font-weight: 400; color: #64748B;">Investigator</span>
+            </div>
+            <div style="width: 2px; height: 80px; background-color: #E5E7EB; margin: 0px 8px;"></div>
+            <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 24px; font-weight: 500; color: #1E3A5F; max-width: 600px;">
+                Know your fund's performance like a professional.
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
     # Sidebar Configuration
     with st.sidebar:

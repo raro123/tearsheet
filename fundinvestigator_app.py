@@ -33,23 +33,14 @@ st.markdown("""
         margin-bottom: 2rem;
     }
 
-    /* Logo header */
-    .logo-header {
-        position: fixed;
-        top: 20px;
-        right: 30px;
-        z-index: 999;
-        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
-    }
-
-    /* Ensure main content doesn't overlap with logo */
-    .main .block-container {
-        padding-top: 3rem;
+    /* Hide default Streamlit header padding */
+    .block-container {
+        padding-top: 1rem;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Add logo to top right header
+# Store logo function in session state for use in pages
 def get_logo_base64():
     """Load logo and convert to base64"""
     logo_path = Path(__file__).parent / \
@@ -58,14 +49,9 @@ def get_logo_base64():
         svg_content = f.read()
     return base64.b64encode(svg_content.encode()).decode()
 
-# Render logo in top right
-st.markdown(f"""
-    <div style="position: fixed; top: 20px; right: 30px; z-index: 999;">
-        <img src="data:image/svg+xml;base64,{get_logo_base64()}"
-             alt="Fund Investigator"
-             style="width: 140px; height: auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">
-    </div>
-""", unsafe_allow_html=True)
+# Store logo base64 in session state for reuse
+if 'logo_base64' not in st.session_state:
+    st.session_state.logo_base64 = get_logo_base64()
 
 # Initialize data loader in session state
 if 'data_loader' not in st.session_state:
