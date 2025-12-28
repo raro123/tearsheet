@@ -9,15 +9,15 @@ from pathlib import Path
 def render_hero_section():
     """Render hero section with logo and headline"""
 
-    # Construct path to logo
+    # Construct path to logo (without tagline)
     logo_path = Path(__file__).parent.parent.parent / \
-        "fundinvestigator-brand-package/brand-package-final/logo-with-tagline.svg"
+        "fundinvestigator-brand-package/brand-package-final/logo-primary.svg"
 
     # Hero section with Navy background
     st.markdown(f"""
         <div class="hero-section">
             <div class="logo-container">
-                <img src="data:image/svg+xml;base64,{get_svg_b64(logo_path)}" alt="Fund Investigator" class="hero-logo">
+                <img src="data:image/svg+xml;base64,{get_svg_b64(logo_path)}" alt="Fund Investigator" class="hero-logo" style="width: 350px; max-width: 90%;">
             </div>
             <h1 class="hero-headline" style="color: #FFFFFF !important;">Professional-Grade Fund Analysis</h1>
             <p class="hero-subheadline" style="color: #D4AF37 !important;">Institutional metrics and insights for every investor</p>
@@ -134,6 +134,5 @@ def render(data_loader=None):
 
     # Render sections
     render_hero_section()
-    render_value_propositions()
     render_tool_cards()
     render_footer()

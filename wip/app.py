@@ -15,8 +15,8 @@ import app_pages.fund_deepdive as page_fund_deepdive
 
 # Page configuration
 st.set_page_config(
-    page_title="Mutual Fund Analysis Platform",
-    page_icon="📊",
+    page_title="Fund Investigator",
+    page_icon="🔍",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -226,6 +226,63 @@ st.markdown("""
         font-size: 1rem;
         color: #64748B;
         margin-bottom: 2rem;
+    }
+
+    /* ============================================
+       MODERN NAVIGATION SIDEBAR
+       ============================================ */
+    /* Sidebar container */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1E3A5F 0%, #14283F 100%);
+    }
+
+    [data-testid="stSidebar"] > div:first-child {
+        background: transparent;
+    }
+
+    /* Navigation header */
+    [data-testid="stSidebarNav"] {
+        padding-top: 2rem;
+        background: transparent;
+    }
+
+    /* Navigation links */
+    [data-testid="stSidebarNav"] a {
+        background: rgba(255, 255, 255, 0.05) !important;
+        border-radius: 8px !important;
+        margin: 0.5rem 1rem !important;
+        padding: 0.75rem 1rem !important;
+        color: rgba(255, 255, 255, 0.85) !important;
+        font-weight: 500 !important;
+        transition: all 0.3s ease !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+
+    [data-testid="stSidebarNav"] a:hover {
+        background: rgba(212, 175, 55, 0.15) !important;
+        border-color: #D4AF37 !important;
+        color: #D4AF37 !important;
+        transform: translateX(4px);
+    }
+
+    /* Active navigation item */
+    [data-testid="stSidebarNav"] a[aria-current="page"] {
+        background: linear-gradient(135deg, #D4AF37 0%, #C99F2D 100%) !important;
+        color: #1E3A5F !important;
+        font-weight: 600 !important;
+        border-color: #D4AF37 !important;
+        box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+    }
+
+    /* Navigation icons */
+    [data-testid="stSidebarNav"] a span {
+        font-size: 1.1rem;
+    }
+
+    /* Sidebar divider */
+    [data-testid="stSidebar"] hr {
+        border-color: rgba(255, 255, 255, 0.1);
+        margin: 1.5rem 0;
     }
 
     /* ============================================
