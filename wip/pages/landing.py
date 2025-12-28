@@ -19,8 +19,8 @@ def render_hero_section():
             <div class="logo-container">
                 <img src="data:image/svg+xml;base64,{get_svg_b64(logo_path)}" alt="Fund Investigator" class="hero-logo">
             </div>
-            <h1 class="hero-headline">Professional-Grade Fund Analysis</h1>
-            <p class="hero-subheadline">Institutional metrics and insights for every investor</p>
+            <h1 class="hero-headline" style="color: #FFFFFF !important;">Professional-Grade Fund Analysis</h1>
+            <p class="hero-subheadline" style="color: #D4AF37 !important;">Institutional metrics and insights for every investor</p>
         </div>
     """, unsafe_allow_html=True)
 
