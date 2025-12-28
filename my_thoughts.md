@@ -46,3 +46,8 @@ Rolling analysis:
 
     Now fund invetigator in iddependent.I want to clear up the project directory. Organise it so that fund investigator is the focus. Rest all can be put to work in progress as that will not go to production. 
     We will also need to update the filterpane - to remove the non-live tabs. Remove performance cache metrics as we prepare for release.
+
+
+    Minor updates:
+     - in sidebar I see funddeepdive tab and fundinvetigator app tab, this is not needed as we only have one page
+      - 
