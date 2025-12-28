@@ -135,18 +135,23 @@ class R2DataLoader:
             print(f"Bucket: {bucket}")
             print(f"NAV data path: {data_path}")
 
-            # Create tables from R2 parquet files
-            _self.conn.execute(f"""
-                CREATE TABLE IF NOT EXISTS mf_nav_daily_long AS
-                SELECT * FROM read_parquet('s3://{bucket}/{data_path}')
-            """)
-            print("Table mf_nav_daily_long created successfully.")
-
+            # Create metadata table first (needed for filtering)
             _self.conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS mf_scheme_metadata AS
                 SELECT * FROM read_parquet('s3://{bucket}/{metadata_path}')
+                WHERE scheme_category_level1 = 'Equity'
             """)
-            print("Table mf_scheme_metadata created successfully.")
+            print("Table mf_scheme_metadata created successfully (Equity funds only).")
+
+            # Create NAV table with only equity funds (memory optimization)
+            _self.conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS mf_nav_daily_long AS
+                SELECT nav.* FROM read_parquet('s3://{bucket}/{data_path}') nav
+                WHERE nav.scheme_code IN (
+                    SELECT scheme_code FROM mf_scheme_metadata
+                )
+            """)
+            print("Table mf_nav_daily_long created successfully (Equity funds only).")
 
             _self.conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS mf_benchmark_daily_long AS
