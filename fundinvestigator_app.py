@@ -13,7 +13,7 @@ import app_pages.fund_deepdive as page_fund_deepdive
 # Page configuration
 st.set_page_config(
     page_title="Fund Investigator",
-    page_icon="🔍",
+    page_icon="fundinvestigator-brand-package/brand-package-final/favicon-32.svg",
     layout="wide",
     initial_sidebar_state="expanded"
 )

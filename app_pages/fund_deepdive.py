@@ -37,19 +37,24 @@ def render(data_loader):
     """
     # Page header - Custom FundInvestigator header component
     st.markdown("""
-        <div style="display: flex; align-items: center; gap: 24px; padding: 35px 0px 30px 0px;">
-            <div style="background-color: #1E3A5F; border-radius: 10px; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(30, 58, 95, 0.2);">
-                <span style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 26px; font-weight: 700; letter-spacing: -1px;">
-                    <span style="color: white;">F</span><span style="color: #D4AF37;">I</span><span style="color: white;">N</span>
-                </span>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 35px 0px 30px 0px;">
+            <div style="display: flex; align-items: center; gap: 24px;">
+                <div style="background-color: #1E3A5F; border-radius: 10px; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(30, 58, 95, 0.2);">
+                    <span style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 26px; font-weight: 700; letter-spacing: -1px;">
+                        <span style="color: white;">F</span><span style="color: #D4AF37;">I</span><span style="color: white;">N</span>
+                    </span>
+                </div>
+                <div style="display: flex; flex-direction: column; line-height: 1.1;">
+                    <span style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 36px; font-weight: 700; color: #1E3A5F;">Fund</span>
+                    <span style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 22px; font-weight: 400; color: #64748B;">Investigator</span>
+                </div>
+                <div style="width: 2px; height: 80px; background-color: #E5E7EB; margin: 0px 8px;"></div>
+                <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 24px; font-weight: 500; color: #1E3A5F; max-width: 600px;">
+                    Know your fund's performance like a professional.
+                </div>
             </div>
-            <div style="display: flex; flex-direction: column; line-height: 1.1;">
-                <span style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 36px; font-weight: 700; color: #1E3A5F;">Fund</span>
-                <span style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 22px; font-weight: 400; color: #64748B;">Investigator</span>
-            </div>
-            <div style="width: 2px; height: 80px; background-color: #E5E7EB; margin: 0px 8px;"></div>
-            <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 24px; font-weight: 500; color: #1E3A5F; max-width: 600px;">
-                Know your fund's performance like a professional.
+            <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 14px; color: #64748B; text-align: right;">
+                <span style="font-weight: 600;">Data Source:</span> AMFI NAV Data
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -721,9 +726,20 @@ def render(data_loader):
 
     # Footer
     st.markdown("---")
-    st.caption(
-        f"📅 Analysis Period: {start_date} to {end_date} ({period_desc}) | "
-        f"💰 Risk-Free Rate: {risk_free_rate*100:.2f}% | "
-        f"📊 Data Points: {len(df)} | "
-        f"🗄️ Data Source: Cloudflare R2"
-    )
+    st.markdown("""
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 0px;">
+            <div style="background-color: #1E3A5F; border-radius: 6px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                <span style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 14px; font-weight: 700; letter-spacing: -0.5px;">
+                    <span style="color: white;">F</span><span style="color: #D4AF37;">I</span><span style="color: white;">N</span>
+                </span>
+            </div>
+            <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; color: #64748B;">
+                Created by <a href="https://www.linkedin.com/in/ishpreet-singh-modi" target="_blank" style="color: #1E3A5F; font-weight: 600; text-decoration: none;">Ishpreet Singh Modi</a>
+            </div>
+            <a href="https://www.linkedin.com/in/ishpreet-singh-modi" target="_blank" style="text-decoration: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#0A66C2" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                </svg>
+            </a>
+        </div>
+    """, unsafe_allow_html=True)
