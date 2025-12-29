@@ -429,121 +429,136 @@ def render(data_loader):
     # Dynamic header based on comparison fund selection
     if comparison_returns is not None:
         st.caption(
-            f"<span style='color:#1E3A5F;font-size: 16px; font-weight:bold'>{strategy_name_clean}</span> vs "
-            f"<span style='color:#94A3B8;font-size: 16px; font-weight:bold'>{benchmark_name}</span> vs "
-            f"<span style='color:#D4AF37;font-size: 16px; font-weight:bold'>{comparison_name_clean}</span> | "
+            f"<span style='color:#1E3A5F;font-size: 18px; font-weight:bold'>{strategy_name_clean}</span> vs "
+            f"<span style='color:#94A3B8;font-size: 18px; font-weight:bold'>{benchmark_name}</span> vs "
+            f"<span style='color:#D4AF37;font-size: 18px; font-weight:bold'>{comparison_name_clean}</span> | "
             f"Period: {start_date} to {end_date} ({period_desc})",
             unsafe_allow_html=True
         )
     else:
         st.caption(
-            f"<span style='color:#1E3A5F;font-size: 16px; font-weight:bold'>{strategy_name_clean}</span> vs "
-            f"<span style='color:#94A3B8;font-size: 16px; font-weight:bold'>{benchmark_name}</span> | "
+            f"<span style='color:#1E3A5F;font-size: 18px; font-weight:bold'>{strategy_name_clean}</span> vs "
+            f"<span style='color:#94A3B8;font-size: 18px; font-weight:bold'>{benchmark_name}</span> | "
             f"Period: {start_date} to {end_date} ({period_desc})",
             unsafe_allow_html=True
         )
 
+    # st.divider()
 
+    # col1, col2, col3 = st.columns(3)
+    # col4, col5, col6 = st.columns(3)
+    
     with st.container(
-        border=True,
-        horizontal=True,
-        horizontal_alignment="distribute",
-        vertical_alignment="center"
-    ):
-
-            st.metric(
-                "IRR",
-                f"{fund_irr:.1f}%",
-                delta=f"{(fund_irr - benchmark_irr):.1f}% vs BM",
-                help="Internal Rate of Return (annualized) for ₹100/month SIP"
-            )
-            if comparison_returns is not None and comparison_irr is not None:
+            horizontal=True,
+            horizontal_alignment="center",
+            vertical_alignment="center",
+        ):
+        with st.container(
+            horizontal=True,
+            horizontal_alignment="center",
+            vertical_alignment="center",
+        ):
+            col1, col2, col3 = st.columns(3)
+            with col1:
                 st.metric(
-                    label="",
-                    value="",
-                    delta=f"{(fund_irr - comparison_irr):.1f}% vs CF",
-                    label_visibility="collapsed"
+                    "IRR",
+                    f"{fund_irr:.1f}%",
+                    delta=f"{(fund_irr - benchmark_irr):.1f}% vs BM",
+                    help="Internal Rate of Return (annualized) for ₹100/month SIP"
                 )
-
-            st.metric(
-                "CAGR",
-                f"{strategy_metrics['CAGR']*100:.1f}%",
-                delta=f"{(strategy_metrics['CAGR'] - benchmark_metrics['CAGR'])*100:.1f}% vs BM",
-                help="Compound Annual Growth Rate"
-            )
-            if comparison_returns is not None:
-                delta_cf = (strategy_metrics['CAGR'] -
-                            comparison_metrics['CAGR'])*100
+                if comparison_returns is not None and comparison_irr is not None:
+                    st.metric(
+                        label="",
+                        value="",
+                        delta=f"{(fund_irr - comparison_irr):.1f}% vs CF",
+                        label_visibility="collapsed"
+                    )
+            with col2:
                 st.metric(
-                    label="",
-                    value="",
-                    delta=f"{delta_cf:.1f}% vs CF",
-                    label_visibility="collapsed"
+                    "CAGR",
+                    f"{strategy_metrics['CAGR']*100:.1f}%",
+                    delta=f"{(strategy_metrics['CAGR'] - benchmark_metrics['CAGR'])*100:.1f}% vs BM",
+                    help="Compound Annual Growth Rate"
                 )
-
-            st.metric(
-                "Total Return",
-                f"{strategy_metrics['Cumulative Return']*100:.1f}%",
-                delta=f"{(strategy_metrics['Cumulative Return'] - benchmark_metrics['Cumulative Return'])*100:.1f}% vs BM",
-                help="Total cumulative return over the period"
-            )
-            if comparison_returns is not None:
-                delta_cf = (strategy_metrics['Cumulative Return'] - comparison_metrics['Cumulative Return'])*100
+                if comparison_returns is not None:
+                    delta_cf = (strategy_metrics['CAGR'] -
+                                comparison_metrics['CAGR'])*100
+                    st.metric(
+                        label="",
+                        value="",
+                        delta=f"{delta_cf:.1f}% vs CF",
+                        label_visibility="collapsed"
+                    )
+            with col3:
                 st.metric(
-                    label="",
-                    value="",
-                    delta=f"{delta_cf:.1f}% vs CF",
-                    label_visibility="collapsed"
+                    "Total Return",
+                    f"{strategy_metrics['Cumulative Return']*100:.1f}%",
+                    delta=f"{(strategy_metrics['Cumulative Return'] - benchmark_metrics['Cumulative Return'])*100:.1f}% vs BM",
+                    help="Total cumulative return over the period"
                 )
-
-            st.metric(
-                "Sharpe Ratio",
-                f"{strategy_metrics['Sharpe Ratio']:.2f}",
-                delta=f"{strategy_metrics['Sharpe Ratio'] - benchmark_metrics['Sharpe Ratio']:.2f} vs BM",
-                help="Risk-adjusted return metric"
-            )
-            if comparison_returns is not None:
-                delta_cf = strategy_metrics['Sharpe Ratio'] - comparison_metrics['Sharpe Ratio']
+                if comparison_returns is not None:
+                    delta_cf = (strategy_metrics['Cumulative Return'] - comparison_metrics['Cumulative Return'])*100
+                    st.metric(
+                        label="",
+                        value="",
+                        delta=f"{delta_cf:.1f}% vs CF",
+                        label_visibility="collapsed"
+                    )
+        with st.container(
+            horizontal=True,
+            horizontal_alignment="center",
+            vertical_alignment="center",
+        ):
+            col4, col5, col6 = st.columns(3)
+            with col4:
                 st.metric(
-                    label="",
-                    value="",
-                    delta=f"{delta_cf:.2f} vs CF",
-                    label_visibility="collapsed"
+                    "Sharpe Ratio",
+                    f"{strategy_metrics['Sharpe Ratio']:.2f}",
+                    delta=f"{strategy_metrics['Sharpe Ratio'] - benchmark_metrics['Sharpe Ratio']:.2f} vs BM",
+                    help="Risk-adjusted return metric"
                 )
-
-            st.metric(
-                "Max Drawdown",
-                f"{strategy_metrics['Max Drawdown']*100:.1f}%",
-                delta=f"{(benchmark_metrics['Max Drawdown'] - strategy_metrics['Max Drawdown'])*100:.1f}% vs BM",
-                delta_color="inverse",
-                help="Maximum peak-to-trough decline"
-            )
-            if comparison_returns is not None:
-                delta_cf = (comparison_metrics['Max Drawdown'] - strategy_metrics['Max Drawdown'])*100
+                if comparison_returns is not None:
+                    delta_cf = strategy_metrics['Sharpe Ratio'] - comparison_metrics['Sharpe Ratio']
+                    st.metric(
+                        label="",
+                        value="",
+                        delta=f"{delta_cf:.2f} vs CF",
+                        label_visibility="collapsed"
+                    )
+            with col5:
                 st.metric(
-                    label="",
-                    value="",
-                    delta=f"{delta_cf:.1f}% vs CF",
+                    "Max Drawdown",
+                    f"{strategy_metrics['Max Drawdown']*100:.1f}%",
+                    delta=f"{(benchmark_metrics['Max Drawdown'] - strategy_metrics['Max Drawdown'])*100:.1f}% vs BM",
                     delta_color="inverse",
-                    label_visibility="collapsed"
+                    help="Maximum peak-to-trough decline"
                 )
-
-            st.metric(
-                "Volatility",
-                f"{strategy_metrics['Volatility (ann.)']*100:.1f}%",
-                delta=f"{(strategy_metrics['Volatility (ann.)'] - benchmark_metrics['Volatility (ann.)'])*100:.1f}% vs BM",
-                delta_color="inverse",
-                help="Annualized standard deviation"
-            )
-            if comparison_returns is not None:
-                delta_cf = (strategy_metrics['Volatility (ann.)'] - comparison_metrics['Volatility (ann.)'])*100
+                if comparison_returns is not None:
+                    delta_cf = (comparison_metrics['Max Drawdown'] - strategy_metrics['Max Drawdown'])*100
+                    st.metric(
+                        label="",
+                        value="",
+                        delta=f"{delta_cf:.1f}% vs CF",
+                        delta_color="inverse",
+                        label_visibility="collapsed"
+                    )
+            with col6:
                 st.metric(
-                    label="",
-                    value="",
-                    delta=f"{delta_cf:.1f}% vs CF",
+                    "Volatility",
+                    f"{strategy_metrics['Volatility (ann.)']*100:.1f}%",
+                    delta=f"{(strategy_metrics['Volatility (ann.)'] - benchmark_metrics['Volatility (ann.)'])*100:.1f}% vs BM",
                     delta_color="inverse",
-                    label_visibility="collapsed"
+                    help="Annualized standard deviation"
                 )
+                if comparison_returns is not None:
+                    delta_cf = (strategy_metrics['Volatility (ann.)'] - comparison_metrics['Volatility (ann.)'])*100
+                    st.metric(
+                        label="",
+                        value="",
+                        delta=f"{delta_cf:.1f}% vs CF",
+                        delta_color="inverse",
+                        label_visibility="collapsed"
+                    )
 
     # === SECTION 2A: PERFORMANCE OVERVIEW ===
 
