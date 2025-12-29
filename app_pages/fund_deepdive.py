@@ -24,7 +24,8 @@ from src.visualizations import (
     create_monthly_returns_scatter,
     create_comparison_metrics_table,
     create_performance_overview_subplot,
-    create_rolling_analysis_subplot
+    create_rolling_analysis_subplot,
+    create_sip_portfolio_chart
 )
 from utils.helpers import create_metrics_comparison_df, get_period_description, create_metric_category_df, highlight_outliers_in_monthly_table, format_sip_table
 from src.shared_components import filter_funds_by_plan_type
@@ -562,19 +563,79 @@ def render(data_loader):
 
     # === SECTION 2A: PERFORMANCE OVERVIEW ===
 
-    # Integrated 4-row performance overview (SIP + Cumulative + Drawdown + Annual)
+    # Individual performance charts (SIP + Cumulative + Drawdown + Annual)
+
+    # Chart 1: SIP Portfolio Growth
     with st.container(
         border=True,
         horizontal_alignment="distribute",
         vertical_alignment="center"
     ):
+        st.subheader("SIP Portfolio Growth (₹100/month)")
         st.plotly_chart(
-            create_performance_overview_subplot(
-                strategy_returns, benchmark_returns,
-                strategy_name, benchmark_name,
-                comparison_returns, comparison_name,
-                log_scale=log_scale,
-                sip_table_df=sip_table_df
+            create_sip_portfolio_chart(
+                sip_table_df,
+                strategy_name_clean,
+                benchmark_name,
+                comparison_name_clean if comparison_returns is not None else None
+            ),
+            use_container_width=True
+        )
+
+    # Chart 2: Cumulative Returns
+    with st.container(
+        border=True,
+        horizontal_alignment="distribute",
+        vertical_alignment="center"
+    ):
+        st.subheader(f"Cumulative Returns{' (Log Scale)' if log_scale else ''}")
+        st.plotly_chart(
+            create_cumulative_returns_chart(
+                strategy_returns,
+                benchmark_returns,
+                strategy_name_clean,
+                benchmark_name,
+                comparison_returns,
+                comparison_name_clean if comparison_returns is not None else None,
+                log_scale
+            ),
+            use_container_width=True
+        )
+
+    # Chart 3: Drawdown Comparison
+    with st.container(
+        border=True,
+        horizontal_alignment="distribute",
+        vertical_alignment="center"
+    ):
+        st.subheader("Drawdown Comparison")
+        st.plotly_chart(
+            create_drawdown_comparison_chart(
+                strategy_returns,
+                benchmark_returns,
+                strategy_name_clean,
+                benchmark_name,
+                comparison_returns,
+                comparison_name_clean if comparison_returns is not None else None
+            ),
+            use_container_width=True
+        )
+
+    # Chart 4: Annual Returns
+    with st.container(
+        border=True,
+        horizontal_alignment="distribute",
+        vertical_alignment="center"
+    ):
+        st.subheader("Annual Returns")
+        st.plotly_chart(
+            create_annual_returns_chart(
+                strategy_returns,
+                benchmark_returns,
+                strategy_name_clean,
+                benchmark_name,
+                comparison_returns,
+                comparison_name_clean if comparison_returns is not None else None
             ),
             use_container_width=True
         )

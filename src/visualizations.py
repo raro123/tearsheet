@@ -5,48 +5,63 @@ from plotly.subplots import make_subplots
 from scipy import stats
 
 def create_cumulative_returns_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name,
-                                    comparison_returns=None, comparison_name=None):
-    """Create cumulative returns comparison chart"""
-    strategy_cum = (1 + strategy_returns).cumprod()
-    benchmark_cum = (1 + benchmark_returns).cumprod()
+                                    comparison_returns=None, comparison_name=None, log_scale=False):
+    """Create cumulative returns comparison chart
+
+    Args:
+        strategy_returns: Series with daily returns
+        benchmark_returns: Series with benchmark daily returns
+        strategy_name: Name of the main fund
+        benchmark_name: Name of the benchmark
+        comparison_returns: Optional Series with comparison fund returns
+        comparison_name: Optional name of comparison fund
+        log_scale: Boolean, if True uses log scale for y-axis
+
+    Returns:
+        Plotly Figure object
+    """
+    strategy_cum = (1 + strategy_returns).cumprod() * 100
+    benchmark_cum = (1 + benchmark_returns).cumprod() * 100
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=strategy_cum.index,
-        y=(strategy_cum - 1) * 100,
+        y=strategy_cum,
         name=strategy_name,
         line=dict(color='#1E3A5F', width=2),
-        hovertemplate='%{y:.2f}%<extra></extra>'
+        hovertemplate='₹%{y:.2f}<extra></extra>'
     ))
     fig.add_trace(go.Scatter(
         x=benchmark_cum.index,
-        y=(benchmark_cum - 1) * 100,
+        y=benchmark_cum,
         name=benchmark_name,
         line=dict(color='#94A3B8', width=2, dash='dash'),
-        hovertemplate='%{y:.2f}%<extra></extra>'
+        hovertemplate='₹%{y:.2f}<extra></extra>'
     ))
 
     # Add comparison fund if provided
     if comparison_returns is not None and comparison_name is not None:
-        comparison_cum = (1 + comparison_returns).cumprod()
+        comparison_cum = (1 + comparison_returns).cumprod() * 100
         fig.add_trace(go.Scatter(
             x=comparison_cum.index,
-            y=(comparison_cum - 1) * 100,
+            y=comparison_cum,
             name=comparison_name,
             line=dict(color='#D4AF37', width=2),
-            hovertemplate='%{y:.2f}%<extra></extra>'
+            hovertemplate='₹%{y:.2f}<extra></extra>'
         ))
 
     fig.update_layout(
-        title=dict(text="Cumulative Returns vs Benchmark", font=dict(size=18, weight='bold')),
         xaxis_title="Date",
-        yaxis_title="Cumulative Return (%)",
-        yaxis=dict(side='right'),
+        yaxis_title="Growth of ₹100",
+        yaxis=dict(
+            side='right',
+            type='log' if log_scale else 'linear'
+        ),
         hovermode='x unified',
-        height=450,
+        height=500,
         template='plotly_white',
-        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5),
-        margin=dict(b=100)
+        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="center", x=0.5),
+        margin=dict(t=80, b=60, l=60, r=60)
     )
 
     return fig
@@ -134,15 +149,14 @@ def create_drawdown_comparison_chart(strategy_returns, benchmark_returns, strate
     ))
 
     fig.update_layout(
-        title=dict(text="Drawdown Comparison", font=dict(size=18, weight='bold')),
         xaxis_title="Date",
         yaxis_title="Drawdown (%)",
         yaxis=dict(side='right'),
         hovermode='x unified',
         height=450,
         template='plotly_white',
-        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5),
-        margin=dict(b=100)
+        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="center", x=0.5),
+        margin=dict(t=80, b=60, l=60, r=60)
     )
 
     return fig
@@ -689,15 +703,14 @@ def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_na
 
     # Update layout
     fig.update_layout(
-        title=dict(text="Annual Returns", font=dict(size=18, weight='bold')),
         xaxis_title="Year",
         yaxis_title="Return (%)",
-        height=500,
+        height=400,
         template='plotly_white',
         barmode='group',
-        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5),
+        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="center", x=0.5),
         hovermode='x unified',
-        margin=dict(t=80, b=110, l=50, r=50)  # Extra top margin for labels, bottom for legend
+        margin=dict(t=80, b=60, l=60, r=60)
     )
 
     return fig
@@ -3428,3 +3441,115 @@ def create_comparison_metrics_table(strategy_metrics, benchmark_name,
 
     df = pd.DataFrame(data)
     return df
+
+
+def create_sip_portfolio_chart(sip_table_df, strategy_name, benchmark_name, comparison_name=None):
+    """Create SIP portfolio growth chart
+
+    Args:
+        sip_table_df: DataFrame from create_sip_progression_table with columns:
+                     Period, Invested, Fund Value, Benchmark Value, Comp Value
+        strategy_name: Name of the main fund
+        benchmark_name: Name of the benchmark
+        comparison_name: Optional name of comparison fund
+
+    Returns:
+        Plotly Figure object
+    """
+    # Prepare SIP data (remove TOTAL and IRR rows)
+    chart_df = sip_table_df.iloc[:-2].copy()
+    chart_df['Date'] = pd.to_datetime(chart_df['Period'] + '-01')
+
+    fig = go.Figure()
+
+    # Add Amount Invested (reference line)
+    fig.add_trace(go.Scatter(
+        x=chart_df['Date'],
+        y=chart_df['Invested'],
+        name='Amount Invested',
+        line=dict(color='#9CA3AF', width=2, dash='dash'),
+        hovertemplate='Invested: ₹%{y:,.2f}<extra></extra>',
+        showlegend=True
+    ))
+
+    # Add Fund Value
+    fig.add_trace(go.Scatter(
+        x=chart_df['Date'],
+        y=chart_df['Fund Value'],
+        name=strategy_name,
+        line=dict(color='#1E3A5F', width=2),
+        hovertemplate=f'{strategy_name}: ₹%{{y:,.2f}}<extra></extra>',
+        showlegend=True
+    ))
+
+    # Add Benchmark Value
+    fig.add_trace(go.Scatter(
+        x=chart_df['Date'],
+        y=chart_df['Benchmark Value'],
+        name=benchmark_name,
+        line=dict(color='#94A3B8', width=2, dash='dash'),
+        hovertemplate=f'{benchmark_name}: ₹%{{y:,.2f}}<extra></extra>',
+        showlegend=True
+    ))
+
+    # Add Comparison Value (conditional)
+    if comparison_name is not None and 'Comp Value' in chart_df.columns:
+        fig.add_trace(go.Scatter(
+            x=chart_df['Date'],
+            y=chart_df['Comp Value'],
+            name=comparison_name,
+            line=dict(color='#D4AF37', width=2),
+            hovertemplate=f'{comparison_name}: ₹%{{y:,.2f}}<extra></extra>',
+            showlegend=True
+        ))
+
+    # Add IRR annotation
+    irr_row = sip_table_df.iloc[-1]
+    total_row = sip_table_df.iloc[-2]
+
+    annotation_lines = ['<b>IRR % | Final Amount</b>']
+
+    # Fund
+    fund_irr = irr_row['Fund Value']
+    fund_final = total_row['Fund Value']
+    annotation_lines.append(f'<span style="color:#1E3A5F">■</span> Fund: {fund_irr:.1f}% | ₹{fund_final:,.0f}')
+
+    # Benchmark
+    bench_irr = irr_row['Benchmark Value']
+    bench_final = total_row['Benchmark Value']
+    annotation_lines.append(f'<span style="color:#94A3B8">■</span> Benchmark: {bench_irr:.1f}% | ₹{bench_final:,.0f}')
+
+    # Comparison (conditional)
+    if comparison_name is not None and 'Comp Value' in chart_df.columns:
+        comp_irr = irr_row['Comp Value']
+        comp_final = total_row['Comp Value']
+        annotation_lines.append(f'<span style="color:#D4AF37">■</span> Comp: {comp_irr:.1f}% | ₹{comp_final:,.0f}')
+
+    fig.add_annotation(
+        x=chart_df['Date'].min(),
+        y=chart_df[['Invested', 'Fund Value', 'Benchmark Value']].max().max() * 0.98,
+        xref='x', yref='y',
+        text='<br>'.join(annotation_lines),
+        showarrow=False,
+        align='left',
+        xanchor='left',
+        yanchor='top',
+        bgcolor='rgba(255, 255, 255, 0.9)',
+        bordercolor='lightgray',
+        borderwidth=1,
+        font=dict(size=11)
+    )
+
+    # Update layout
+    fig.update_layout(
+        xaxis_title="Date",
+        yaxis_title="Amount (₹)",
+        yaxis=dict(tickformat='₹,.0f', side='right'),
+        hovermode='x unified',
+        height=400,
+        template='plotly_white',
+        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="center", x=0.5),
+        margin=dict(t=80, b=60, l=60, r=60)
+    )
+
+    return fig
