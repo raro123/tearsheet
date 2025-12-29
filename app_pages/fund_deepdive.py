@@ -705,16 +705,36 @@ def render(data_loader):
         ):
 
         # === SECTION 2C: ROLLING ANALYSIS ===
-        st.caption("📊 **Rolling Analysis** | Multi-metric performance tracking over time")
+        # Header with radio button
+        col_caption, col_radio = st.columns([2, 2])
 
-        # Period selection only
-        rolling_period_option = st.radio(
-            "Rolling Period",
-            options=["6 months", "1 year", "3 years", "5 years"],
-            index=1,  # Default: 1 year
-            horizontal=True,
-            key="fd_rolling_period_radio"
-        )
+        with col_caption:
+            st.caption("📊 **Rolling Analysis** | Multi-metric performance tracking over time")
+
+        with col_radio:
+            # Period selection
+            rolling_period_option = st.radio(
+                "Rolling Period",
+                options=["6 months", "1 year", "3 years", "5 years"],
+                index=1,  # Default: 1 year
+                horizontal=True,
+                key="fd_rolling_period_radio"
+            )
+
+        # Custom color legend below
+        if comparison_returns is not None:
+            st.caption(
+                f"<span style='color:#1E3A5F'>●</span> {strategy_name_clean} | "
+                f"<span style='color:#94A3B8'>●</span> {benchmark_name} | "
+                f"<span style='color:#D4AF37'>●</span> {comparison_name_clean}",
+                unsafe_allow_html=True
+            )
+        else:
+            st.caption(
+                f"<span style='color:#1E3A5F'>●</span> {strategy_name_clean} | "
+                f"<span style='color:#94A3B8'>●</span> {benchmark_name}",
+                unsafe_allow_html=True
+            )
 
         # Map selections to parameters
         period_mapping = {
