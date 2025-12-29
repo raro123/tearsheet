@@ -385,8 +385,8 @@ def create_rolling_returns_chart(strategy_returns, benchmark_returns, strategy_n
         hovermode='x unified',
         height=400,
         template='plotly_white',
-        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="left", x=0),
-        margin=dict(t=80, b=60, l=60, r=60)
+        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
+        margin=dict(t=80, b=120, l=60, r=60)
     )
 
     return fig
@@ -449,8 +449,8 @@ def create_rolling_volatility_chart(strategy_returns, benchmark_returns, strateg
         hovermode='x unified',
         height=400,
         template='plotly_white',
-        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="left", x=0),
-        margin=dict(t=80, b=60, l=60, r=60)
+        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
+        margin=dict(t=80, b=120, l=60, r=60)
     )
 
     return fig
@@ -511,8 +511,8 @@ def create_rolling_beta_chart(strategy_returns, benchmark_returns, strategy_name
         hovermode='x unified',
         height=400,
         template='plotly_white',
-        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="left", x=0),
-        margin=dict(t=80, b=60, l=60, r=60)
+        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
+        margin=dict(t=80, b=120, l=60, r=60)
     )
 
     return fig
@@ -583,8 +583,8 @@ def create_rolling_correlation_chart(strategy_returns, benchmark_returns, strate
         hovermode='x unified',
         height=400,
         template='plotly_white',
-        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="left", x=0),
-        margin=dict(t=80, b=60, l=60, r=60)
+        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
+        margin=dict(t=80, b=120, l=60, r=60)
     )
 
     return fig
