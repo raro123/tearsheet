@@ -579,15 +579,13 @@ def create_rolling_correlation_chart(strategy_returns, benchmark_returns, strate
         title=dict(text=f"Rolling Correlation ({period_label})", font=dict(size=16)),
         xaxis_title="Date",
         yaxis_title="Correlation",
+        yaxis=dict(side='right', range=[-1, 1], fixedrange=False),
         hovermode='x unified',
         height=400,
         template='plotly_white',
         legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="left", x=0),
         margin=dict(t=80, b=60, l=60, r=60)
     )
-
-    # Set y-axis range after layout to ensure it's applied
-    fig.update_yaxes(side='right', range=[-1, 1])
 
     return fig
 
