@@ -50,7 +50,11 @@ def create_cumulative_returns_chart(strategy_returns, benchmark_returns, strateg
             hovertemplate='₹%{y:.2f}<extra></extra>'
         ))
 
+    # Build title based on log scale
+    title_text = "Cumulative Returns" + (" (Log Scale)" if log_scale else "")
+
     fig.update_layout(
+        title=dict(text=title_text, font=dict(size=16)),
         xaxis_title="Date",
         yaxis_title="Growth of ₹100",
         yaxis=dict(
@@ -60,7 +64,7 @@ def create_cumulative_returns_chart(strategy_returns, benchmark_returns, strateg
         hovermode='x unified',
         height=500,
         template='plotly_white',
-        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="center", x=0.5),
+        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="left", x=0),
         margin=dict(t=80, b=60, l=60, r=60)
     )
 
@@ -149,13 +153,14 @@ def create_drawdown_comparison_chart(strategy_returns, benchmark_returns, strate
     ))
 
     fig.update_layout(
+        title=dict(text="Drawdown Comparison", font=dict(size=16)),
         xaxis_title="Date",
         yaxis_title="Drawdown (%)",
         yaxis=dict(side='right'),
         hovermode='x unified',
         height=450,
         template='plotly_white',
-        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="center", x=0.5),
+        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="left", x=0),
         margin=dict(t=80, b=60, l=60, r=60)
     )
 
@@ -373,16 +378,216 @@ def create_rolling_returns_chart(strategy_returns, benchmark_returns, strategy_n
         period_label = "5 Years"
 
     fig.update_layout(
-        title=dict(text=f"Rolling Returns ({period_label}, Annualized)", font=dict(size=18, weight='bold')),
+        title=dict(text=f"Rolling Returns ({period_label})", font=dict(size=16)),
         xaxis_title="Date",
         yaxis_title="Annualized Return (%)",
         yaxis=dict(side='right'),
         hovermode='x unified',
-        height=450,
+        height=400,
         template='plotly_white',
-        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5),
-        margin=dict(b=100)
+        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="left", x=0),
+        margin=dict(t=80, b=60, l=60, r=60)
     )
+
+    return fig
+
+def create_rolling_volatility_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name, window=252,
+                                    comparison_returns=None, comparison_name=None):
+    """Create rolling volatility comparison chart"""
+    import numpy as np
+    TRADING_DAYS = 252
+
+    # Calculate rolling volatility (annualized)
+    strategy_rolling_vol = strategy_returns.rolling(window).std() * np.sqrt(TRADING_DAYS) * 100
+    benchmark_rolling_vol = benchmark_returns.rolling(window).std() * np.sqrt(TRADING_DAYS) * 100
+
+    fig = go.Figure()
+
+    # Add strategy rolling volatility
+    fig.add_trace(go.Scatter(
+        x=strategy_rolling_vol.index,
+        y=strategy_rolling_vol,
+        name=strategy_name,
+        line=dict(color='#1E3A5F', width=2),
+        hovertemplate='%{y:.2f}%<extra></extra>'
+    ))
+
+    # Add benchmark rolling volatility
+    fig.add_trace(go.Scatter(
+        x=benchmark_rolling_vol.index,
+        y=benchmark_rolling_vol,
+        name=benchmark_name,
+        line=dict(color='#94A3B8', width=2, dash='dash'),
+        hovertemplate='%{y:.2f}%<extra></extra>'
+    ))
+
+    # Add comparison fund rolling volatility if provided
+    if comparison_returns is not None and comparison_name is not None:
+        comparison_rolling_vol = comparison_returns.rolling(window).std() * np.sqrt(TRADING_DAYS) * 100
+        fig.add_trace(go.Scatter(
+            x=comparison_rolling_vol.index,
+            y=comparison_rolling_vol,
+            name=comparison_name,
+            line=dict(color='#D4AF37', width=2),
+            hovertemplate='%{y:.2f}%<extra></extra>'
+        ))
+
+    # Determine period label
+    period_label = f"{window} days"
+    if window == 252:
+        period_label = "1 Year"
+    elif window == 756:
+        period_label = "3 Years"
+    elif window == 1260:
+        period_label = "5 Years"
+
+    fig.update_layout(
+        title=dict(text=f"Rolling Volatility ({period_label})", font=dict(size=16)),
+        xaxis_title="Date",
+        yaxis_title="Annualized Volatility (%)",
+        yaxis=dict(side='right'),
+        hovermode='x unified',
+        height=400,
+        template='plotly_white',
+        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="left", x=0),
+        margin=dict(t=80, b=60, l=60, r=60)
+    )
+
+    return fig
+
+def create_rolling_beta_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name, window=252,
+                              comparison_returns=None, comparison_name=None):
+    """Create rolling beta comparison chart"""
+    # Align returns for beta calculation
+    aligned_strategy, aligned_benchmark = strategy_returns.align(benchmark_returns, join='inner')
+
+    # Calculate rolling beta
+    strategy_rolling_cov = aligned_strategy.rolling(window).cov(aligned_benchmark)
+    benchmark_rolling_var = aligned_benchmark.rolling(window).var()
+    strategy_rolling_beta = strategy_rolling_cov / benchmark_rolling_var
+
+    fig = go.Figure()
+
+    # Add strategy rolling beta
+    fig.add_trace(go.Scatter(
+        x=strategy_rolling_beta.index,
+        y=strategy_rolling_beta,
+        name=strategy_name,
+        line=dict(color='#1E3A5F', width=2),
+        hovertemplate='%{y:.2f}<extra></extra>'
+    ))
+
+    # Add comparison fund rolling beta if provided
+    if comparison_returns is not None and comparison_name is not None:
+        aligned_comparison, _ = comparison_returns.align(benchmark_returns, join='inner')
+        comparison_rolling_cov = aligned_comparison.rolling(window).cov(aligned_benchmark)
+        comparison_rolling_beta = comparison_rolling_cov / benchmark_rolling_var
+
+        fig.add_trace(go.Scatter(
+            x=comparison_rolling_beta.index,
+            y=comparison_rolling_beta,
+            name=comparison_name,
+            line=dict(color='#D4AF37', width=2),
+            hovertemplate='%{y:.2f}<extra></extra>'
+        ))
+
+    # Add reference line at Beta = 1.0
+    fig.add_hline(y=1.0, line_dash="dot", line_color="gray", opacity=0.5)
+
+    # Determine period label
+    period_label = f"{window} days"
+    if window == 252:
+        period_label = "1 Year"
+    elif window == 756:
+        period_label = "3 Years"
+    elif window == 1260:
+        period_label = "5 Years"
+
+    fig.update_layout(
+        title=dict(text=f"Rolling Beta ({period_label})", font=dict(size=16)),
+        xaxis_title="Date",
+        yaxis_title="Beta",
+        yaxis=dict(side='right'),
+        hovermode='x unified',
+        height=400,
+        template='plotly_white',
+        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="left", x=0),
+        margin=dict(t=80, b=60, l=60, r=60)
+    )
+
+    return fig
+
+def create_rolling_correlation_chart(strategy_returns, benchmark_returns, strategy_name, benchmark_name, window=252,
+                                     comparison_returns=None, comparison_name=None):
+    """Create rolling correlation comparison chart"""
+    # Align returns for correlation calculation
+    aligned_strategy, aligned_benchmark = strategy_returns.align(benchmark_returns, join='inner')
+
+    # Calculate rolling correlation
+    strategy_rolling_corr = aligned_strategy.rolling(window).corr(aligned_benchmark)
+
+    fig = go.Figure()
+
+    # Add strategy rolling correlation
+    fig.add_trace(go.Scatter(
+        x=strategy_rolling_corr.index,
+        y=strategy_rolling_corr,
+        name=strategy_name,
+        line=dict(color='#1E3A5F', width=2),
+        hovertemplate='%{y:.3f}<extra></extra>'
+    ))
+
+    # Add comparison fund rolling correlation if provided
+    if comparison_returns is not None and comparison_name is not None:
+        aligned_comparison, _ = comparison_returns.align(benchmark_returns, join='inner')
+        comparison_rolling_corr = aligned_comparison.rolling(window).corr(aligned_benchmark)
+
+        fig.add_trace(go.Scatter(
+            x=comparison_rolling_corr.index,
+            y=comparison_rolling_corr,
+            name=comparison_name,
+            line=dict(color='#D4AF37', width=2),
+            hovertemplate='%{y:.3f}<extra></extra>'
+        ))
+
+        # Add strategy vs comparison fund correlation
+        strategy_comp_corr = aligned_strategy.rolling(window).corr(aligned_comparison)
+
+        fig.add_trace(go.Scatter(
+            x=strategy_comp_corr.index,
+            y=strategy_comp_corr,
+            name=f"{strategy_name} vs {comparison_name}",
+            line=dict(color='#8b5cf6', width=2, dash='dot'),
+            hovertemplate='%{y:.3f}<extra></extra>'
+        ))
+
+    # Add reference lines at -1, 0, 1
+    fig.add_hline(y=1.0, line_dash="dot", line_color="gray", opacity=0.5)
+    fig.add_hline(y=0.0, line_dash="dot", line_color="gray", opacity=0.5)
+    fig.add_hline(y=-1.0, line_dash="dot", line_color="gray", opacity=0.5)
+
+    # Determine period label
+    period_label = f"{window} days"
+    if window == 252:
+        period_label = "1 Year"
+    elif window == 756:
+        period_label = "3 Years"
+    elif window == 1260:
+        period_label = "5 Years"
+
+    fig.update_layout(
+        title=dict(text=f"Rolling Correlation ({period_label})", font=dict(size=16)),
+        xaxis_title="Date",
+        yaxis_title="Correlation",
+        hovermode='x unified',
+        height=400,
+        template='plotly_white',
+        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="left", x=0),
+        margin=dict(t=80, b=60, l=60, r=60)
+    )
+
+    # Set y-axis range after layout to ensure it's applied
+    fig.update_yaxes(side='right', range=[-1, 1])
 
     return fig
 
@@ -703,12 +908,13 @@ def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_na
 
     # Update layout
     fig.update_layout(
+        title=dict(text="Annual Returns", font=dict(size=16)),
         xaxis_title="Year",
         yaxis_title="Return (%)",
         height=400,
         template='plotly_white',
         barmode='group',
-        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="center", x=0.5),
+        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="left", x=0),
         hovermode='x unified',
         margin=dict(t=80, b=60, l=60, r=60)
     )
@@ -3533,7 +3739,7 @@ def create_sip_portfolio_chart(sip_table_df, strategy_name, benchmark_name, comp
         showarrow=False,
         align='left',
         xanchor='left',
-        yanchor='top',
+        yanchor='bottom',
         bgcolor='rgba(255, 255, 255, 0.9)',
         bordercolor='lightgray',
         borderwidth=1,
@@ -3542,13 +3748,14 @@ def create_sip_portfolio_chart(sip_table_df, strategy_name, benchmark_name, comp
 
     # Update layout
     fig.update_layout(
+        title=dict(text="SIP Portfolio Growth (₹100/month)", font=dict(size=16)),
         xaxis_title="Date",
         yaxis_title="Amount (₹)",
         yaxis=dict(tickformat='₹,.0f', side='right'),
         hovermode='x unified',
         height=400,
         template='plotly_white',
-        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="center", x=0.5),
+        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="left", x=0),
         margin=dict(t=80, b=60, l=60, r=60)
     )
 

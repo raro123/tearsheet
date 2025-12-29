@@ -25,7 +25,10 @@ from src.visualizations import (
     create_comparison_metrics_table,
     create_performance_overview_subplot,
     create_rolling_analysis_subplot,
-    create_sip_portfolio_chart
+    create_sip_portfolio_chart,
+    create_rolling_volatility_chart,
+    create_rolling_beta_chart,
+    create_rolling_correlation_chart
 )
 from utils.helpers import create_metrics_comparison_df, get_period_description, create_metric_category_df, highlight_outliers_in_monthly_table, format_sip_table
 from src.shared_components import filter_funds_by_plan_type
@@ -571,7 +574,6 @@ def render(data_loader):
         horizontal_alignment="distribute",
         vertical_alignment="center"
     ):
-        st.subheader("SIP Portfolio Growth (₹100/month)")
         st.plotly_chart(
             create_sip_portfolio_chart(
                 sip_table_df,
@@ -588,7 +590,6 @@ def render(data_loader):
         horizontal_alignment="distribute",
         vertical_alignment="center"
     ):
-        st.subheader(f"Cumulative Returns{' (Log Scale)' if log_scale else ''}")
         st.plotly_chart(
             create_cumulative_returns_chart(
                 strategy_returns,
@@ -608,7 +609,6 @@ def render(data_loader):
         horizontal_alignment="distribute",
         vertical_alignment="center"
     ):
-        st.subheader("Drawdown Comparison")
         st.plotly_chart(
             create_drawdown_comparison_chart(
                 strategy_returns,
@@ -627,7 +627,6 @@ def render(data_loader):
         horizontal_alignment="distribute",
         vertical_alignment="center"
     ):
-        st.subheader("Annual Returns")
         st.plotly_chart(
             create_annual_returns_chart(
                 strategy_returns,
@@ -727,20 +726,64 @@ def render(data_loader):
 
         period_config = period_mapping[rolling_period_option]
 
-        # Display subplot (always use simple rolling)
-        st.plotly_chart(
-            create_rolling_analysis_subplot(
-                strategy_returns, benchmark_returns,
-                strategy_name, benchmark_name,
-                window=period_config["days"],
-                ewm_span=period_config["span"],
-                use_ewm=False,  # Always use simple rolling
-                period_label=period_config["label"],
-                comparison_returns=comparison_returns,
-                comparison_name=comparison_name
-            ),
-            use_container_width=True
-        )
+        # Display 2x2 grid of individual rolling charts
+        # Row 1: Rolling Returns | Rolling Volatility
+        row1_col1, row1_col2 = st.columns([1, 1])
+
+        with row1_col1:
+            with st.container(border=True, horizontal_alignment="distribute", vertical_alignment="center"):
+                st.plotly_chart(
+                    create_rolling_returns_chart(
+                        strategy_returns, benchmark_returns,
+                        strategy_name_clean, benchmark_name,
+                        window=period_config["days"],
+                        comparison_returns=comparison_returns,
+                        comparison_name=comparison_name_clean if comparison_returns is not None else None
+                    ),
+                    use_container_width=True
+                )
+
+        with row1_col2:
+            with st.container(border=True, horizontal_alignment="distribute", vertical_alignment="center"):
+                st.plotly_chart(
+                    create_rolling_volatility_chart(
+                        strategy_returns, benchmark_returns,
+                        strategy_name_clean, benchmark_name,
+                        window=period_config["days"],
+                        comparison_returns=comparison_returns,
+                        comparison_name=comparison_name_clean if comparison_returns is not None else None
+                    ),
+                    use_container_width=True
+                )
+
+        # Row 2: Rolling Beta | Rolling Correlation
+        row2_col1, row2_col2 = st.columns([1, 1])
+
+        with row2_col1:
+            with st.container(border=True, horizontal_alignment="distribute", vertical_alignment="center"):
+                st.plotly_chart(
+                    create_rolling_beta_chart(
+                        strategy_returns, benchmark_returns,
+                        strategy_name_clean, benchmark_name,
+                        window=period_config["days"],
+                        comparison_returns=comparison_returns,
+                        comparison_name=comparison_name_clean if comparison_returns is not None else None
+                    ),
+                    use_container_width=True
+                )
+
+        with row2_col2:
+            with st.container(border=True, horizontal_alignment="distribute", vertical_alignment="center"):
+                st.plotly_chart(
+                    create_rolling_correlation_chart(
+                        strategy_returns, benchmark_returns,
+                        strategy_name_clean, benchmark_name,
+                        window=period_config["days"],
+                        comparison_returns=comparison_returns,
+                        comparison_name=comparison_name_clean if comparison_returns is not None else None
+                    ),
+                    use_container_width=True
+                )
 
     # === SECTION 3: MONTHLY RETURNS ANALYSIS ===
     with st.container(border=True):
