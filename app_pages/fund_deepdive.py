@@ -667,9 +667,9 @@ def render(data_loader):
             comparison_display = comparison_name if len(comparison_name) <= 30 else comparison_name[:27] + "..."
 
         # Define metric categories
-        return_metrics = ['Cumulative Return', 'CAGR', 'Expected Annual Return', 'Expected Monthly Return', 'Expected Daily Return', 'Win Rate', 'Max Consecutive Wins']
-        risk_metrics = ['Volatility (ann.)', 'Max Drawdown', 'Avg Drawdown', 'Longest DD Days', 'Skewness', 'VaR (95%)', 'CVaR (95%)']
-        ratio_metrics = ['Sharpe Ratio', 'Sortino Ratio', 'Calmar Ratio', 'Omega Ratio', 'Lower Tail Ratio', 'Upper Tail Ratio']
+        return_metrics = ['Cumulative Return', 'CAGR', 'Expected Annual Return', 'Active Return', 'Monthly Consistency', 'Annual Consistency', 'Beta']
+        risk_metrics = ['Volatility (ann.)', 'Max Drawdown', 'Avg Drawdown', 'Longest DD Years', 'CVaR (95%)', 'Drawdown Recovery Years', 'Active Risk']
+        ratio_metrics = ['Sharpe Ratio', 'Sortino Ratio', 'Calmar Ratio', 'Omega Ratio', 'Information Ratio', 'Upcapture Ratio', 'Downcapture Ratio', 'Lower Tail Ratio', 'Upper Tail Ratio']
 
         with st.container():
             col1, col2, col3 = st.columns(3)
@@ -689,7 +689,7 @@ def render(data_loader):
                 st.dataframe(risk_df, hide_index=True, use_container_width=True)
 
             with col3:
-                st.caption("📈 **Ratio Metrics**")
+                st.caption("📈 **Risk Adjusted Metrics**")
                 ratio_df = create_metric_category_df(strategy_metrics, benchmark_metrics, ratio_metrics,
                                                     strategy_display, benchmark_display,
                                                     comparison_metrics, comparison_display)

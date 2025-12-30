@@ -3,17 +3,29 @@ import numpy as np
 
 def format_metric_value(metric_name, value):
     """Format metric value for display"""
+    # Handle None values (e.g., "In Drawdown", no data)
+    if value is None:
+        if metric_name == 'Drawdown Recovery Years':
+            return "In Drawdown"
+        return "N/A"
+
     percentage_metrics = [
         'Cumulative Return', 'CAGR', 'Max Drawdown', 'Avg Drawdown',
-        'Volatility (ann.)', 'Win Rate', 'Expected Annual Return',
-        'Expected Monthly Return', 'Expected Daily Return',
-        'VaR (95%)', 'CVaR (95%)'
+        'Volatility (ann.)', 'Expected Annual Return', 'Active Return',
+        'Monthly Consistency', 'Annual Consistency', 'CVaR (95%)',
+        'Active Risk'
     ]
+
+    years_metrics = ['Longest DD Years', 'Drawdown Recovery Years']
+
+    ratio_metrics = ['Upcapture Ratio', 'Downcapture Ratio']
 
     if metric_name in percentage_metrics:
         return f"{value*100:.2f}%"
-    elif metric_name in ['Longest DD Days', 'Max Consecutive Wins', 'Max Consecutive Losses']:
-        return f"{int(value)}"
+    elif metric_name in years_metrics:
+        return f"{value:.2f} yrs"
+    elif metric_name in ratio_metrics:
+        return f"{value:.2f}x"
     else:
         return f"{value:.2f}"
 

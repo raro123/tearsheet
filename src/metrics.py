@@ -173,6 +173,126 @@ def calculate_alpha(fund_cagr, benchmark_cagr, beta, risk_free_rate=0.0249):
 
     return alpha
 
+def calculate_active_metrics(fund_returns, benchmark_returns):
+    """Calculate active return, active risk (tracking error), and information ratio
+
+    Args:
+        fund_returns: Series of fund returns
+        benchmark_returns: Series of benchmark returns
+
+    Returns:
+        tuple: (active_return, active_risk, information_ratio)
+    """
+    if fund_returns is None or benchmark_returns is None:
+        return None, None, None
+
+    # Active returns (fund - benchmark)
+    active_returns = fund_returns - benchmark_returns
+
+    # Active return (annualized)
+    active_return = active_returns.mean() * TRADING_DAYS
+
+    # Active risk / Tracking error (annualized std of active returns)
+    active_risk = active_returns.std() * np.sqrt(TRADING_DAYS)
+
+    # Information ratio (active return / active risk)
+    information_ratio = active_return / active_risk if active_risk > 0 else None
+
+    return active_return, active_risk, information_ratio
+
+def calculate_consistency_metrics(fund_returns, benchmark_returns):
+    """Calculate monthly and annual consistency (outperformance frequency)
+
+    Args:
+        fund_returns: Series of fund returns (daily)
+        benchmark_returns: Series of benchmark returns (daily)
+
+    Returns:
+        tuple: (monthly_consistency, annual_consistency)
+    """
+    if fund_returns is None or benchmark_returns is None:
+        return None, None
+
+    # Monthly consistency
+    fund_monthly = fund_returns.resample('M').apply(lambda x: (1 + x).prod() - 1)
+    bench_monthly = benchmark_returns.resample('M').apply(lambda x: (1 + x).prod() - 1)
+    monthly_consistency = (fund_monthly > bench_monthly).sum() / len(fund_monthly)
+
+    # Annual consistency
+    fund_annual = fund_returns.resample('Y').apply(lambda x: (1 + x).prod() - 1)
+    bench_annual = benchmark_returns.resample('Y').apply(lambda x: (1 + x).prod() - 1)
+    annual_consistency = (fund_annual > bench_annual).sum() / len(fund_annual) if len(fund_annual) > 0 else None
+
+    return monthly_consistency, annual_consistency
+
+def calculate_drawdown_recovery(returns):
+    """Calculate time to recover from maximum drawdown in years
+
+    Args:
+        returns: Series of returns
+
+    Returns:
+        float: Recovery time in years, or None if still in drawdown
+    """
+    if returns is None or len(returns) < 2:
+        return None
+
+    # Calculate cumulative returns
+    cum_returns = (1 + returns).cumprod()
+
+    # Calculate running maximum
+    running_max = cum_returns.expanding().max()
+
+    # Find max drawdown point
+    drawdown = (cum_returns - running_max) / running_max
+    max_dd_idx = drawdown.idxmin()
+
+    # Find when it recovered (first time cum_returns >= running_max after max_dd)
+    after_max_dd = cum_returns.loc[max_dd_idx:]
+    recovery_point = running_max.loc[max_dd_idx]
+
+    recovery_idx = after_max_dd[after_max_dd >= recovery_point].first_valid_index()
+
+    if recovery_idx is None or recovery_idx == max_dd_idx:
+        # Still in drawdown
+        return None
+
+    # Calculate recovery time in years
+    recovery_days = (recovery_idx - max_dd_idx).days
+    recovery_years = recovery_days / TRADING_DAYS
+
+    return recovery_years
+
+def calculate_capture_ratios(fund_returns, benchmark_returns):
+    """Calculate upcapture and downcapture ratios
+
+    Args:
+        fund_returns: Series of fund returns
+        benchmark_returns: Series of benchmark returns
+
+    Returns:
+        tuple: (upcapture_ratio, downcapture_ratio)
+    """
+    if fund_returns is None or benchmark_returns is None:
+        return None, None
+
+    # Separate up and down periods based on benchmark
+    up_periods = benchmark_returns > 0
+    down_periods = benchmark_returns < 0
+
+    # Calculate average returns in each period
+    fund_up_avg = fund_returns[up_periods].mean() if up_periods.sum() > 0 else 0
+    bench_up_avg = benchmark_returns[up_periods].mean() if up_periods.sum() > 0 else 0
+
+    fund_down_avg = fund_returns[down_periods].mean() if down_periods.sum() > 0 else 0
+    bench_down_avg = benchmark_returns[down_periods].mean() if down_periods.sum() > 0 else 0
+
+    # Calculate ratios (annualized for consistency)
+    upcapture = (fund_up_avg / bench_up_avg) if bench_up_avg != 0 else None
+    downcapture = (fund_down_avg / bench_down_avg) if bench_down_avg != 0 else None
+
+    return upcapture, downcapture
+
 def calculate_all_metrics(returns, benchmark_returns=None, risk_free_rate=0.0249):
     """Calculate all performance metrics organized by category"""
     max_wins, max_losses = calculate_consecutive_streaks(returns)
@@ -180,34 +300,61 @@ def calculate_all_metrics(returns, benchmark_returns=None, risk_free_rate=0.0249
     var, cvar = calculate_var_cvar(returns)
     upper_tail, lower_tail = calculate_tail_ratios(returns)
 
+    # Calculate active metrics if benchmark available
+    active_return, active_risk, information_ratio = None, None, None
+    monthly_consistency, annual_consistency = None, None
+    upcapture_ratio, downcapture_ratio = None, None
+    if benchmark_returns is not None:
+        active_return, active_risk, information_ratio = calculate_active_metrics(returns, benchmark_returns)
+        monthly_consistency, annual_consistency = calculate_consistency_metrics(returns, benchmark_returns)
+        upcapture_ratio, downcapture_ratio = calculate_capture_ratios(returns, benchmark_returns)
+
     # Return Metrics
     return_metrics = {
         'Cumulative Return': calculate_cumulative_return(returns),
         'CAGR': calculate_cagr(returns),
         'Expected Annual Return': expected_annual,
-        'Expected Monthly Return': expected_monthly,
-        'Expected Daily Return': expected_daily,
-        'Win Rate': calculate_win_rate(returns),
-        'Max Consecutive Wins': max_wins,
+        'Active Return': active_return,
+        'Monthly Consistency': monthly_consistency,
+        'Annual Consistency': annual_consistency,
     }
+
+    # Add Beta to return metrics if benchmark available
+    if benchmark_returns is not None:
+        beta, correlation, r_squared = calculate_beta_correlation(returns, benchmark_returns)
+        if beta is not None:
+            return_metrics['Beta'] = beta
+
+    # Calculate drawdown recovery
+    recovery_years = calculate_drawdown_recovery(returns)
+
+    # Annualize CVaR
+    cvar_annualized = cvar * np.sqrt(TRADING_DAYS)
+
+    # Convert Longest DD to years
+    longest_dd_days = calculate_longest_drawdown(returns)
+    longest_dd_years = longest_dd_days / TRADING_DAYS if longest_dd_days is not None else None
 
     # Risk Metrics
     risk_metrics = {
         'Volatility (ann.)': calculate_volatility(returns),
         'Max Drawdown': calculate_max_drawdown(returns),
         'Avg Drawdown': calculate_average_drawdown(returns),
-        'Longest DD Days': calculate_longest_drawdown(returns),
-        'Skewness': stats.skew(returns.dropna()),
-        'VaR (95%)': var,
-        'CVaR (95%)': cvar,
+        'Longest DD Years': longest_dd_years,
+        'CVaR (95%)': cvar_annualized,
+        'Drawdown Recovery Years': recovery_years,
+        'Active Risk': active_risk,
     }
 
-    # Ratio Metrics
+    # Ratio Metrics (now called Risk Adjusted Metrics in UI)
     ratio_metrics = {
         'Sharpe Ratio': calculate_sharpe_ratio(returns, risk_free_rate),
         'Sortino Ratio': calculate_sortino_ratio(returns, risk_free_rate),
         'Calmar Ratio': calculate_calmar_ratio(returns, risk_free_rate),
         'Omega Ratio': calculate_omega_ratio(returns, risk_free_rate),
+        'Information Ratio': information_ratio,
+        'Upcapture Ratio': upcapture_ratio,
+        'Downcapture Ratio': downcapture_ratio,
         'Lower Tail Ratio': lower_tail,
         'Upper Tail Ratio': upper_tail,
     }
@@ -215,11 +362,10 @@ def calculate_all_metrics(returns, benchmark_returns=None, risk_free_rate=0.0249
     # Combine all metrics
     metrics = {**return_metrics, **risk_metrics, **ratio_metrics}
 
-    # Add benchmark-relative metrics
+    # Add remaining benchmark-relative metrics (Beta already added to return_metrics above)
     if benchmark_returns is not None:
         beta, correlation, r_squared = calculate_beta_correlation(returns, benchmark_returns)
-        if beta is not None:
-            metrics['Beta'] = beta
+        if correlation is not None:
             metrics['Correlation'] = correlation
             metrics['R²'] = r_squared
 
