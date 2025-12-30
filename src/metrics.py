@@ -186,8 +186,14 @@ def calculate_active_metrics(fund_returns, benchmark_returns):
     if fund_returns is None or benchmark_returns is None:
         return None, None, None
 
+    # Align the returns to have the same index
+    fund_returns_aligned, benchmark_returns_aligned = fund_returns.align(benchmark_returns, join='inner')
+
+    if len(fund_returns_aligned) == 0:
+        return None, None, None
+
     # Active returns (fund - benchmark)
-    active_returns = fund_returns - benchmark_returns
+    active_returns = fund_returns_aligned - benchmark_returns_aligned
 
     # Active return (annualized)
     active_return = active_returns.mean() * TRADING_DAYS
@@ -213,15 +219,39 @@ def calculate_consistency_metrics(fund_returns, benchmark_returns):
     if fund_returns is None or benchmark_returns is None:
         return None, None
 
+    # Align the returns to have the same index
+    fund_returns_aligned, benchmark_returns_aligned = fund_returns.align(benchmark_returns, join='inner')
+
+    if len(fund_returns_aligned) == 0:
+        return None, None
+
     # Monthly consistency
-    fund_monthly = fund_returns.resample('M').apply(lambda x: (1 + x).prod() - 1)
-    bench_monthly = benchmark_returns.resample('M').apply(lambda x: (1 + x).prod() - 1)
-    monthly_consistency = (fund_monthly > bench_monthly).sum() / len(fund_monthly)
+    fund_monthly = fund_returns_aligned.resample('M').apply(lambda x: (1 + x).prod() - 1)
+    bench_monthly = benchmark_returns_aligned.resample('M').apply(lambda x: (1 + x).prod() - 1)
+
+    # Align monthly results and filter out NaN values
+    fund_monthly_clean = fund_monthly.dropna()
+    bench_monthly_clean = bench_monthly.dropna()
+    common_months = fund_monthly_clean.index.intersection(bench_monthly_clean.index)
+
+    if len(common_months) > 0:
+        monthly_consistency = (fund_monthly_clean[common_months] > bench_monthly_clean[common_months]).sum() / len(common_months)
+    else:
+        monthly_consistency = None
 
     # Annual consistency
-    fund_annual = fund_returns.resample('Y').apply(lambda x: (1 + x).prod() - 1)
-    bench_annual = benchmark_returns.resample('Y').apply(lambda x: (1 + x).prod() - 1)
-    annual_consistency = (fund_annual > bench_annual).sum() / len(fund_annual) if len(fund_annual) > 0 else None
+    fund_annual = fund_returns_aligned.resample('Y').apply(lambda x: (1 + x).prod() - 1)
+    bench_annual = benchmark_returns_aligned.resample('Y').apply(lambda x: (1 + x).prod() - 1)
+
+    # Align annual results and filter out NaN values
+    fund_annual_clean = fund_annual.dropna()
+    bench_annual_clean = bench_annual.dropna()
+    common_years = fund_annual_clean.index.intersection(bench_annual_clean.index)
+
+    if len(common_years) > 0:
+        annual_consistency = (fund_annual_clean[common_years] > bench_annual_clean[common_years]).sum() / len(common_years)
+    else:
+        annual_consistency = None
 
     return monthly_consistency, annual_consistency
 
@@ -276,18 +306,24 @@ def calculate_capture_ratios(fund_returns, benchmark_returns):
     if fund_returns is None or benchmark_returns is None:
         return None, None
 
+    # Align the returns to have the same index
+    fund_returns_aligned, benchmark_returns_aligned = fund_returns.align(benchmark_returns, join='inner')
+
+    if len(fund_returns_aligned) == 0:
+        return None, None
+
     # Separate up and down periods based on benchmark
-    up_periods = benchmark_returns > 0
-    down_periods = benchmark_returns < 0
+    up_periods = benchmark_returns_aligned > 0
+    down_periods = benchmark_returns_aligned < 0
 
     # Calculate average returns in each period
-    fund_up_avg = fund_returns[up_periods].mean() if up_periods.sum() > 0 else 0
-    bench_up_avg = benchmark_returns[up_periods].mean() if up_periods.sum() > 0 else 0
+    fund_up_avg = fund_returns_aligned[up_periods].mean() if up_periods.sum() > 0 else 0
+    bench_up_avg = benchmark_returns_aligned[up_periods].mean() if up_periods.sum() > 0 else 0
 
-    fund_down_avg = fund_returns[down_periods].mean() if down_periods.sum() > 0 else 0
-    bench_down_avg = benchmark_returns[down_periods].mean() if down_periods.sum() > 0 else 0
+    fund_down_avg = fund_returns_aligned[down_periods].mean() if down_periods.sum() > 0 else 0
+    bench_down_avg = benchmark_returns_aligned[down_periods].mean() if down_periods.sum() > 0 else 0
 
-    # Calculate ratios (annualized for consistency)
+    # Calculate ratios
     upcapture = (fund_up_avg / bench_up_avg) if bench_up_avg != 0 else None
     downcapture = (fund_down_avg / bench_down_avg) if bench_down_avg != 0 else None
 
