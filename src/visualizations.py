@@ -912,7 +912,7 @@ def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_na
         height=400,
         template='plotly_white',
         barmode='group',
-        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="left", x=0),
+        legend=dict(orientation="h", yanchor="top", y=1.2, xanchor="left", x=0.2),
         hovermode='x unified',
         margin=dict(t=80, b=60, l=60, r=60)
     )
@@ -3731,13 +3731,13 @@ def create_sip_portfolio_chart(sip_table_df, strategy_name, benchmark_name, comp
 
     fig.add_annotation(
         x=chart_df['Date'].min(),
-        y=chart_df[['Invested', 'Fund Value', 'Benchmark Value']].max().max() * 0.98,
+        y=chart_df[['Invested', 'Fund Value', 'Benchmark Value']].max().max() * 0.5,
         xref='x', yref='y',
         text='<br>'.join(annotation_lines),
         showarrow=False,
         align='left',
         xanchor='left',
-        yanchor='bottom',
+        yanchor='middle',
         bgcolor='rgba(255, 255, 255, 0.9)',
         bordercolor='lightgray',
         borderwidth=1,
@@ -3746,7 +3746,7 @@ def create_sip_portfolio_chart(sip_table_df, strategy_name, benchmark_name, comp
 
     # Update layout
     fig.update_layout(
-        title=dict(text="SIP Portfolio Growth (₹100/month)", font=dict(size=16)),
+        title=dict(text="SIP Portfolio Growth (₹1000/month)", font=dict(size=16)),
         xaxis_title="Date",
         yaxis_title="Amount (₹)",
         yaxis=dict(tickformat='₹,.0f', side='right'),

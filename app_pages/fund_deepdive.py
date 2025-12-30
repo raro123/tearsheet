@@ -41,9 +41,9 @@ def render(data_loader):
         data_loader: R2DataLoader instance from session state
     """
     
-    with st.container():
+    #with st.container():
     # Page header - Custom FundInvestigator header component
-        st.markdown("""
+    st.markdown("""
     <style>
         /* This targets the main container top padding */
         .block-container {
@@ -51,24 +51,35 @@ def render(data_loader):
         }
     </style>
 """, unsafe_allow_html=True)
-        with st.container(horizontal=True, 
-                          horizontal_alignment="left",
-                          vertical_alignment="center"):   
+    
+    with st.container(horizontal=True, 
+                        horizontal_alignment="distribute",
+                        vertical_alignment="top"): 
+        col1,col2,col3 = st.columns([.2,.5,.3])
+        with col1:  
             st.image('fundinvestigator-brand-package/brand-package-final/logo-primary.svg')
+        with col2:
             st.markdown(
-                    """
-                    <h1 style='color: #1E3A5F;'>
-                        Mutual Fund Tearsheet
-                    </h1>
-                    """, 
-                    unsafe_allow_html=True
-                )
-            st.markdown("""
-                <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 16px; font-weight: 500; color: #1E3A5F; max-width: 600px;">
-                    Professional Insights for Mutual Fund Investors
-                </div>""",unsafe_allow_html=True)
-        st.divider()
-        
+                """
+                <h1 style='color: #1E3A5F;text-align: center'>
+                    Mutual Fund Tearsheet
+                </h1>
+                """, 
+                unsafe_allow_html=True
+            )
+        with col3:
+            st.markdown(
+                """
+                <br>
+                <h5 style='color: #1E3A5F;text-align: right'>
+                    Performance analysis, simplified
+                    <h6 style='color: #1E3A5F;text-align: right'> Data AMFI Website</h6>
+                </h5>
+                """, 
+                unsafe_allow_html=True
+            )
+    st.divider()
+    
 
     # Sidebar Configuration
     with st.sidebar:
@@ -420,7 +431,7 @@ def render(data_loader):
         strategy_returns,
         benchmark_returns,
         comparison_returns,
-        monthly_investment=100
+        monthly_investment=1000
     )
 
     # Extract IRR values from SIP table (last row)
@@ -835,9 +846,9 @@ def render(data_loader):
                 )
 
         # Subsection 1: Scatter Plot
-        st.markdown("#### Scatter: Fund vs Benchmark Returns")
+        # st.markdown("#### Scatter: Fund vs Benchmark Returns")
 
-        col_scatter, col_metrics = st.columns([2, 1])
+        col_scatter, col_metrics = st.columns([2, 1], border=True)
 
         with col_metrics:
             st.caption("**Comparison Metrics vs Benchmark**")
@@ -886,7 +897,7 @@ def render(data_loader):
                     styled_strategy,
                     hide_index=True,
                     use_container_width=True,
-                    height=400
+                   # height=400
                 )
 
             with col2:
@@ -898,7 +909,7 @@ def render(data_loader):
                     styled_benchmark,
                     hide_index=True,
                     use_container_width=True,
-                    height=400
+                    #height=400
                 )
 
             # Add third column for comparison fund if toggle is ON
@@ -912,9 +923,9 @@ def render(data_loader):
                         styled_comparison,
                         hide_index=True,
                         use_container_width=True,
-                        height=400
+                        #height=400
                     )
-
+    
     # Footer
     st.markdown("---")
     st.markdown("""
