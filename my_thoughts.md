@@ -68,3 +68,23 @@ Rolling analysis:
      - the fill of area charts
      - the color of bar chart
      - the legend below the metric table
+
+
+
+     Create a branch performance metrics update. We will update the performance metrics section in fund_deepdive. 
+
+    clarification question ? - is it possible to add help text on each metric which appear as "?" if it is easy add small definition in all metrics under performance metrics section 
+     Updates in Return metrics table:
+      - remove: Expected daily return, expected monthly return, win rate and max consective wins
+       - add: Active return, Monthly Consistency, Annual Consistency & Beta
+
+      Updates in Risk Metrics:
+       - remove: skewness, Var
+       - update: 
+          - Longest DD Days convert to longest DD in years, 
+          - CVaR - is it possible to use annualised number for CVaR
+          - add - Drawdown Recovery years, Active risk
+
+      Updates in Ratio Metrics (Rename to Risk Adjusted Metrics):
+       - Add: information ratio, upcapture ratio, downcapture ratio
+

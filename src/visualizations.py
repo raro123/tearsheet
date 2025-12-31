@@ -912,10 +912,13 @@ def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_na
         height=400,
         template='plotly_white',
         barmode='group',
-        legend=dict(orientation="h", yanchor="top", y=1.2, xanchor="left", x=0.2),
+        legend=dict(orientation="h", yanchor="top", y=1.2, xanchor="left", x=0),
         hovermode='x unified',
         margin=dict(t=80, b=60, l=60, r=60)
     )
+    
+    # Update all y-axes to be on right side
+    fig.update_yaxes(side='right')
 
     return fig
 
