@@ -169,34 +169,41 @@ class TestVarCVar:
     """Tests for calculate_var_cvar()"""
 
     def test_return_tuple(self, simple_returns):
-        """Test that function returns tuple of (var, cvar)"""
+        """Test that function returns tuple of (var_daily, cvar_daily, var_monthly, cvar_monthly)"""
         result = calculate_var_cvar(simple_returns)
         assert isinstance(result, tuple)
-        assert len(result) == 2
-        var, cvar = result
-        assert isinstance(var, (int, float))
-        assert isinstance(cvar, (int, float))
+        assert len(result) == 4
+        var_daily, cvar_daily, var_monthly, cvar_monthly = result
+        assert isinstance(var_daily, (int, float))
+        assert isinstance(cvar_daily, (int, float))
+        assert isinstance(var_monthly, (int, float))
+        assert isinstance(cvar_monthly, (int, float))
 
     def test_cvar_worse_than_var(self, simple_returns):
         """Test that CVaR is typically worse (more negative) than VaR"""
-        var, cvar = calculate_var_cvar(simple_returns)
-        # CVaR should be more negative (tail risk)
-        assert cvar <= var
+        var_daily, cvar_daily, var_monthly, cvar_monthly = calculate_var_cvar(simple_returns)
+        # CVaR should be more negative (tail risk) for both daily and monthly
+        assert cvar_daily <= var_daily
+        assert cvar_monthly <= var_monthly
 
     def test_confidence_level(self, simple_returns):
         """Test different confidence levels"""
-        var_95, cvar_95 = calculate_var_cvar(simple_returns, confidence_level=0.95)
-        var_99, cvar_99 = calculate_var_cvar(simple_returns, confidence_level=0.99)
+        var_95_daily, cvar_95_daily, var_95_monthly, cvar_95_monthly = calculate_var_cvar(simple_returns, confidence_level=0.95)
+        var_99_daily, cvar_99_daily, var_99_monthly, cvar_99_monthly = calculate_var_cvar(simple_returns, confidence_level=0.99)
 
-        # 99% should be more extreme than 95%
-        assert var_99 <= var_95
-        assert cvar_99 <= cvar_95
+        # 99% should be more extreme than 95% for both daily and monthly
+        assert var_99_daily <= var_95_daily
+        assert cvar_99_daily <= cvar_95_daily
+        assert var_99_monthly <= var_95_monthly
+        assert cvar_99_monthly <= cvar_95_monthly
 
     def test_negative_returns(self, negative_returns):
         """Test VaR/CVaR with all negative returns"""
-        var, cvar = calculate_var_cvar(negative_returns)
-        assert var < 0
-        assert cvar < 0
+        var_daily, cvar_daily, var_monthly, cvar_monthly = calculate_var_cvar(negative_returns)
+        assert var_daily < 0
+        assert cvar_daily < 0
+        assert var_monthly < 0
+        assert cvar_monthly < 0
 
 
 class TestDrawdownRecovery:

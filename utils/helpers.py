@@ -7,25 +7,37 @@ def format_metric_value(metric_name, value):
     if value is None:
         if metric_name == 'Drawdown Recovery Years':
             return "In Drawdown"
-        return "N/A"
+        return "-"
 
     percentage_metrics = [
         'Cumulative Return', 'CAGR', 'Max Drawdown', 'Avg Drawdown',
-        'Volatility (ann.)', 'Expected Annual Return', 'Active Return',
-        'Monthly Consistency', 'Annual Consistency', 'CVaR (95%)',
-        'Active Risk'
+        'Volatility (ann.)', 'Expected Annual Return', 'Expected Monthly Return',
+        'Active Return', 'Monthly Consistency', 'Annual Consistency',
+        'CVaR Annual (95%)', 'VaR Annual (95%)',
+        'CVaR Monthly (95%)', 'VaR Monthly (95%)',
+        'Active Risk', 'IRR'
     ]
 
     years_metrics = ['Longest DD Years', 'Drawdown Recovery Years']
 
-    ratio_metrics = ['Upcapture Ratio', 'Downcapture Ratio']
+    capture_ratio_metrics = ['Upcapture Ratio', 'Downcapture Ratio']
+
+    one_decimal_metrics = [
+        'Cumulative Return', 'CAGR', 'Expected Annual Return',
+        'Expected Monthly Return', 'Monthly Consistency', 'Annual Consistency'
+    ]
 
     if metric_name in percentage_metrics:
-        return f"{value*100:.2f}%"
+        # Check if this metric should use 1 decimal place
+        if metric_name in one_decimal_metrics:
+            return f"{value*100:.1f}%"
+        else:
+            return f"{value*100:.2f}%"
     elif metric_name in years_metrics:
         return f"{value:.2f} yrs"
-    elif metric_name in ratio_metrics:
-        return f"{value:.2f}x"
+    elif metric_name in capture_ratio_metrics:
+        # Format as percentage instead of "x" (0.97 -> 97%)
+        return f"{value*100:.0f}%"
     else:
         return f"{value:.2f}"
 

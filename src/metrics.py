@@ -111,11 +111,25 @@ def calculate_average_drawdown(returns):
     return drawdowns.mean() if len(drawdowns) > 0 else 0
 
 def calculate_var_cvar(returns, confidence_level=0.95):
-    """Calculate Value at Risk (VaR) and Conditional Value at Risk (CVaR)"""
-    var = np.percentile(returns.dropna(), (1 - confidence_level) * 100)
+    """Calculate Value at Risk (VaR) and Conditional Value at Risk (CVaR)
+
+    Returns both daily and monthly (scaled) versions.
+    Monthly scaling: daily × √21 trading days
+
+    Returns:
+        tuple: (var_daily, cvar_daily, var_monthly, cvar_monthly)
+    """
+    # Calculate daily VaR/CVaR
+    var_daily = np.percentile(returns.dropna(), (1 - confidence_level) * 100)
     # CVaR is the expected loss given that loss exceeds VaR
-    cvar = returns[returns <= var].mean() if (returns <= var).any() else var
-    return var, cvar
+    cvar_daily = returns[returns <= var_daily].mean() if (returns <= var_daily).any() else var_daily
+
+    # Scale to monthly using √21 trading days
+    sqrt_21 = np.sqrt(21)
+    var_monthly = var_daily * sqrt_21
+    cvar_monthly = cvar_daily * sqrt_21
+
+    return var_daily, cvar_daily, var_monthly, cvar_monthly
 
 def calculate_tail_ratios(returns, percentile=95):
     """Calculate upper and lower tail ratios
@@ -333,7 +347,7 @@ def calculate_all_metrics(returns, benchmark_returns=None, risk_free_rate=0.0249
     """Calculate all performance metrics organized by category"""
     max_wins, max_losses = calculate_consecutive_streaks(returns)
     expected_daily, expected_monthly, expected_annual = calculate_expected_returns(returns)
-    var, cvar = calculate_var_cvar(returns)
+    var_daily, cvar_daily, var_monthly, cvar_monthly = calculate_var_cvar(returns)
     upper_tail, lower_tail = calculate_tail_ratios(returns)
 
     # Calculate active metrics if benchmark available
@@ -350,6 +364,7 @@ def calculate_all_metrics(returns, benchmark_returns=None, risk_free_rate=0.0249
         'Cumulative Return': calculate_cumulative_return(returns),
         'CAGR': calculate_cagr(returns),
         'Expected Annual Return': expected_annual,
+        'Expected Monthly Return': expected_monthly,
         'Active Return': active_return,
         'Monthly Consistency': monthly_consistency,
         'Annual Consistency': annual_consistency,
@@ -364,8 +379,10 @@ def calculate_all_metrics(returns, benchmark_returns=None, risk_free_rate=0.0249
     # Calculate drawdown recovery
     recovery_years = calculate_drawdown_recovery(returns)
 
-    # Annualize CVaR
-    cvar_annualized = cvar * np.sqrt(TRADING_DAYS)
+    # Annualize VaR/CVaR (daily × √252)
+    sqrt_252 = np.sqrt(TRADING_DAYS)
+    var_annual = var_daily * sqrt_252
+    cvar_annual = cvar_daily * sqrt_252
 
     # Convert Longest DD to years
     longest_dd_days = calculate_longest_drawdown(returns)
@@ -377,7 +394,10 @@ def calculate_all_metrics(returns, benchmark_returns=None, risk_free_rate=0.0249
         'Max Drawdown': calculate_max_drawdown(returns),
         'Avg Drawdown': calculate_average_drawdown(returns),
         'Longest DD Years': longest_dd_years,
-        'CVaR (95%)': cvar_annualized,
+        'VaR Annual (95%)': var_annual,
+        'CVaR Annual (95%)': cvar_annual,
+        'VaR Monthly (95%)': var_monthly,
+        'CVaR Monthly (95%)': cvar_monthly,
         'Drawdown Recovery Years': recovery_years,
         'Active Risk': active_risk,
     }

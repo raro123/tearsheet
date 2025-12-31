@@ -909,10 +909,10 @@ def create_annual_returns_chart(strategy_returns, benchmark_returns, strategy_na
         title=dict(text="Annual Returns", font=dict(size=16)),
         xaxis_title="Year",
         yaxis_title="Return (%)",
-        height=400,
+       # height=400,
         template='plotly_white',
         barmode='group',
-        legend=dict(orientation="h", yanchor="top", y=1.2, xanchor="left", x=0),
+        legend=dict(orientation="h", yanchor="top", y=1.1, xanchor="left", x=0),
         hovermode='x unified',
         margin=dict(t=80, b=60, l=60, r=60)
     )

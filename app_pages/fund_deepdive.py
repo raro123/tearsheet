@@ -34,6 +34,30 @@ from utils.helpers import create_metrics_comparison_df, get_period_description, 
 from src.shared_components import filter_funds_by_plan_type
 
 
+def apply_benchmark_defaults(metrics_dict, is_benchmark=False):
+    """Apply hardcoded defaults for benchmark-specific metrics
+
+    Args:
+        metrics_dict: Dictionary of metrics
+        is_benchmark: True if this is the benchmark fund
+
+    Returns:
+        Modified metrics dict with benchmark defaults
+    """
+    if not is_benchmark:
+        return metrics_dict
+
+    # Hardcoded defaults for benchmark
+    metrics_dict['Beta'] = 1.0
+    metrics_dict['Active Return'] = 0.0
+    metrics_dict['Active Risk'] = 0.0
+    metrics_dict['Information Ratio'] = 0.0
+    metrics_dict['Upcapture Ratio'] = 1.0  # Displays as 100%
+    metrics_dict['Downcapture Ratio'] = 1.0  # Displays as 100%
+
+    return metrics_dict
+
+
 def render(data_loader):
     """Render the Fund Deepdive page
 
@@ -393,6 +417,7 @@ def render(data_loader):
         benchmark_name, benchmark_returns, None,
         risk_free_rate, start_date, end_date
     )
+    benchmark_metrics = apply_benchmark_defaults(benchmark_metrics, is_benchmark=True)
 
     # Load comparison fund data if enabled
     if enable_comparison and selected_comparison_fund:
@@ -439,6 +464,13 @@ def render(data_loader):
     fund_irr = irr_row['Fund Value']
     benchmark_irr = irr_row['Benchmark Value']
     comparison_irr = irr_row['Comp Value'] if 'Comp Value' in irr_row and comparison_returns is not None else None
+
+    # Inject IRR into metrics dicts for display in performance table
+    # Convert from percentage (e.g., 12.5) to decimal (e.g., 0.125) to match other metric formats
+    strategy_metrics['IRR'] = fund_irr / 100 if fund_irr is not None else None
+    benchmark_metrics['IRR'] = benchmark_irr / 100 if benchmark_irr is not None else None
+    if comparison_returns is not None and comparison_metrics is not None and comparison_irr is not None:
+        comparison_metrics['IRR'] = comparison_irr / 100
 
     # === SECTION 1: PERFORMANCE SUMMARY ===
     # Dynamic header based on comparison fund selection
@@ -667,9 +699,23 @@ def render(data_loader):
             comparison_display = comparison_name if len(comparison_name) <= 30 else comparison_name[:27] + "..."
 
         # Define metric categories
-        return_metrics = ['Cumulative Return', 'CAGR', 'Expected Annual Return', 'Active Return', 'Monthly Consistency', 'Annual Consistency', 'Beta']
-        risk_metrics = ['Volatility (ann.)', 'Max Drawdown', 'Avg Drawdown', 'Longest DD Years', 'CVaR (95%)', 'Drawdown Recovery Years', 'Active Risk']
-        ratio_metrics = ['Sharpe Ratio', 'Sortino Ratio', 'Calmar Ratio', 'Omega Ratio', 'Information Ratio', 'Upcapture Ratio', 'Downcapture Ratio', 'Lower Tail Ratio', 'Upper Tail Ratio']
+        return_metrics = [
+            'Cumulative Return', 'CAGR',
+            'Expected Annual Return', 'Expected Monthly Return',
+            'IRR',
+            'Active Return', 'Monthly Consistency', 'Annual Consistency', 'Beta'
+        ]
+        risk_metrics = [
+            'Volatility (ann.)', 'Max Drawdown', 'Avg Drawdown', 'Longest DD Years',
+            'VaR Annual (95%)', 'CVaR Annual (95%)',
+            'VaR Monthly (95%)', 'CVaR Monthly (95%)',
+            'Drawdown Recovery Years', 'Active Risk'
+        ]
+        ratio_metrics = [
+            'Sharpe Ratio', 'Sortino Ratio', 'Calmar Ratio', 'Omega Ratio',
+            'Information Ratio', 'Upcapture Ratio', 'Downcapture Ratio',
+            'Lower Tail Ratio', 'Upper Tail Ratio'
+        ]
 
         with st.container():
             col1, col2, col3 = st.columns(3)
